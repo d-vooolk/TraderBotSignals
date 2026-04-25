@@ -55,6 +55,15 @@ export async function getBinanceFuturesPrice(symbol) {
   }
 }
 
+export async function getFuturesCandlestickData(params) {
+  try {
+    const response = await axios.get('https://fapi.binance.com/fapi/v1/klines', {params});
+    return response?.data;
+  } catch (error) {
+    return null;
+  }
+}
+
 export const fetchFuturesSymbols = async () => {
   console.info("📡 Запрос списка фьючерсных монет...");
   try {

@@ -1,12 +1,38 @@
 import WebSocket from "ws";
-import {fetchFuturesSymbols} from "../../api/binanceApi.js";
+import {fetchFuturesSymbols, getFuturesCandlestickData} from "../../api/binanceApi.js";
 import {handleCoinPriceRequest} from "../../handlers/handleCoinPriceRequest/handleCoinPriceRequest.js";
 import {SETTINGS} from "../../settings.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
-/**
- * Запускаем WebSocket Binance и анализируем данные
- */
+
+const calculateRSI = (closes, period = 14) => {
+  if (closes.length < period + 1) return 50;
+  const recent = closes.slice(-(period + 1));
+  let gains = 0, losses = 0;
+  for (let i = 1; i < recent.length; i++) {
+    const diff = recent[i] - recent[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  return 100 - (100 / (1 + avgGain / avgLoss));
+};
+
+const check1hConfirmation = async (symbol, direction) => {
+  try {
+    const candles = await getFuturesCandlestickData({symbol: `${symbol.toUpperCase()}USDT`, interval: '1h', limit: 2});
+    if (!candles || candles.length < 1) return true;
+    const c = candles[candles.length - 1];
+    const change1h = parseFloat(c[4]) - parseFloat(c[1]);
+    if (direction === 'up' && change1h < 0) return false;
+    if (direction === 'down' && change1h > 0) return false;
+    return true;
+  } catch {
+    return true;
+  }
+};
 
 export const startWebSocket = async (bot) => {
   console.info("Старт WebSocket Binance...");
@@ -16,64 +42,84 @@ export const startWebSocket = async (bot) => {
 
   const batchSize = 200;
   const batches = [];
-
   for (let i = 0; i < symbols.length; i += batchSize) {
     batches.push(symbols.slice(i, i + batchSize));
   }
 
   console.info(`📦 Разбито на ${batches.length} пакетов по ${batchSize} монет.`);
 
-  /**
-   * Обработка свечей и логика изменения цены
-   */
+  // { symbol: { lastChange, closes: [], volumes: [] } }
+  const symbolData = {};
 
-  const priceHistory = {}; // Хранилище истории изменений
+  const processCandle = async (symbol, candle) => {
+    const openPrice  = parseFloat(candle.o);
+    const closePrice = parseFloat(candle.c);
+    const volume     = parseFloat(candle.q); // quote volume (USDT)
+    const isClosed   = candle.x;             // true = свеча закрыта
 
-  const processCandle = (symbol, candle) => {
-    const lowPrice = parseFloat(candle.l); // Минимальная цена за период
-    const highPrice = parseFloat(candle.h); // Максимальная цена за период
-    const openPrice = parseFloat(candle.o); // Цена открытия
-    const currentPrice = parseFloat(candle.c); // Текущая цена
+    if (!symbolData[symbol]) {
+      symbolData[symbol] = { lastChange: 0, closes: [], volumes: [] };
+    }
+    const data = symbolData[symbol];
 
-    let percentChange;
-    let direction;
+    // Историю накапливаем только по закрытым свечам — не по промежуточным
+    if (isClosed) {
+      data.closes.push(closePrice);
+      if (data.closes.length > 25) data.closes.shift();
 
-    if (currentPrice > openPrice) {
-      percentChange = ((currentPrice - lowPrice) / lowPrice) * 100;
-      direction = "📈 ВЫРОСЛА";
-    } else {
-      percentChange = ((currentPrice - highPrice) / highPrice) * 100;
-      direction = "📉 УПАЛА";
+      data.volumes.push(volume);
+      if (data.volumes.length > 25) data.volumes.shift();
     }
 
-    const absChange = Math.abs(percentChange);
-    const lastChange = priceHistory[symbol] || 0;
+    // 1. Процент считаем от открытия — реальное движение свечи
+    const percentChange = ((closePrice - openPrice) / openPrice) * 100;
+    const absChange     = Math.abs(percentChange);
+    const direction     = percentChange > 0 ? 'up' : 'down';
+    const dirEmoji      = percentChange > 0 ? '📈 ВЫРОСЛА' : '📉 УПАЛА';
 
-    if (
-        absChange >= SETTINGS.handler.priceChangeThreshold
-        && absChange >= lastChange + SETTINGS.handler.priceChangeThreshold
-    ) {
-      console.info(`🚀 [ALERT] ${symbol.toUpperCase()} ${direction} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
+    // 2. Порог изменения
+    if (absChange < SETTINGS.handler.priceChangeThreshold) return;
+    if (absChange < data.lastChange + SETTINGS.handler.priceChangeThreshold) return;
 
-      if (bot) {
-        handleCoinPriceRequest(bot, SETTINGS.savedChatId, symbol.slice(0, -4), absChange.toFixed(2));
-      }
-
-      priceHistory[symbol] = absChange;
+    // 3. Фильтр объёма: текущий объём >= 1.5x среднего по предыдущим свечам
+    if (data.volumes.length >= 5) {
+      const prev = data.volumes.slice(0, -1);
+      const avg  = prev.reduce((a, b) => a + b, 0) / prev.length;
+      if (avg > 0 && volume < 1.5 * avg) return;
     }
+
+    // 4. RSI-фильтр: не входим в уже перекупленный/перепроданный рынок
+    if (data.closes.length >= 15) {
+      const rsi = calculateRSI(data.closes);
+      if (direction === 'up'   && rsi > 75) return;
+      if (direction === 'down' && rsi < 25) return;
+    }
+
+    // 5. Фильтр тренда по SMA10: торгуем только по тренду
+    if (data.closes.length >= 10) {
+      const sma10 = data.closes.slice(-10).reduce((a, b) => a + b, 0) / 10;
+      if (direction === 'up'   && closePrice < sma10) return;
+      if (direction === 'down' && closePrice > sma10) return;
+    }
+
+    // 6. Подтверждение на 1h таймфрейме
+    const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
+    if (!confirmed) return;
+
+    console.info(`🚀 [ALERT] ${symbol.toUpperCase()} ${dirEmoji} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
+
+    if (bot && SETTINGS.savedChatId) {
+      handleCoinPriceRequest(bot, SETTINGS.savedChatId, symbol.slice(0, -4), absChange.toFixed(2), direction);
+    }
+
+    data.lastChange = absChange;
   };
-
-  /**
-   * Подключаем WebSocket к Binance
-   */
 
   const connectWebSocket = (symbolsBatch, index) => {
     console.info(`🔗 Подключение WebSocket №${index + 1}... (${symbolsBatch.length} монет)`);
 
     const streams = symbolsBatch.map((s) => `${s.toLowerCase()}@kline_${SETTINGS.handler.temporaryCandle}`).join("/");
-
-    const wsUrl = getWsUrl(streams);
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(getWsUrl(streams));
 
     const handleMessage = (message) => {
       try {
@@ -84,17 +130,15 @@ export const startWebSocket = async (bot) => {
       } catch (error) {
         console.error("❌ Ошибка парсинга сообщения:", error);
       }
-    }
+    };
 
-    const handleClose = (index, symbolsBatch) => {
+    ws.addEventListener("open",    () => console.info(`✅ WebSocket ${index + 1} на ${symbolsBatch.length} монет открыт.`));
+    ws.addEventListener("error",   (error) => console.error(`❌ Ошибка WebSocket ${index + 1}:`, error));
+    ws.addEventListener("message", (event) => handleMessage(event.data));
+    ws.addEventListener("close",   () => {
       console.info(`🔄 WebSocket ${index + 1} закрылся. Перезапуск через 5 секунд...`);
       setTimeout(() => connectWebSocket(symbolsBatch, index), 5000);
-    }
-
-    ws.addEventListener("open", () => console.info(`✅ WebSocket ${index + 1} на ${symbolsBatch.length} монет открыт.`));
-    ws.addEventListener("error", (error) => console.error(`❌ Ошибка WebSocket ${index + 1}:`, error));
-    ws.addEventListener("message", (event) => handleMessage(event.data));
-    ws.addEventListener("close", () => handleClose(index, symbolsBatch));
+    });
   };
 
   batches.forEach((batch, index) => connectWebSocket(batch, index));

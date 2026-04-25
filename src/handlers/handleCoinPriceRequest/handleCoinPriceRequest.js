@@ -2,7 +2,9 @@ import {getPrice} from "../utils/getPrice.js";
 import {getError} from "../utils/getError.js";
 import {getUndefinedCoinNotification} from "../utils/getUndefinedCoinNotification.js";
 import {getSendData} from "../utils/getSendData.js";
-export const handleCoinPriceRequest = async (context, chat_id, symbol, changePriceSignal) => {
+import {SETTINGS} from "../../settings.js";
+
+export const handleCoinPriceRequest = async (context, chat_id, symbol, changePriceSignal, direction = null) => {
 
   if (!chat_id) {
     console.error("❌ Ошибка: chat_id не найден");
@@ -25,13 +27,21 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
       return await getUndefinedCoinNotification(context, coinSymbol);
     }
 
-    const [chartUrl, message, buttons] = await getSendData(coinSymbol, spotData, futuresData, changePriceSignal);
+    const [chartUrl, message, buttons] = await getSendData(
+      coinSymbol,
+      spotData,
+      futuresData,
+      changePriceSignal,
+      SETTINGS.candlestick.interval,
+      SETTINGS.candlestick.limit,
+      direction,
+    );
 
     context.telegram.sendPhoto(chat_id, chartUrl, {
       caption: message,
       parse_mode: "MarkdownV2",
       ...buttons,
-    })
+    });
 
   } catch (error) {
     await getError(context, chat_id, coinSymbol, error);

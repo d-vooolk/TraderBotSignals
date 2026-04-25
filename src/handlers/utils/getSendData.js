@@ -12,11 +12,12 @@ export const getSendData = async (
   changePriceSignal,
   interval = "15m",
   limit = 60,
+  direction = null,
 ) => {
 
   const resCandlestick = await getCandlestickData(candlestickParams(coinSymbol, interval, limit));
   const chartUrl = await generateChartURL(resCandlestick);
-  const message = formatCoinResponse({coinSymbol, spotData, futuresData, changePriceSignal});
+  const message = formatCoinResponse({coinSymbol, spotData, futuresData, changePriceSignal, direction});
   const buttons = Markup.inlineKeyboard(generateButtons(coinSymbol));
 
   return [chartUrl, message, buttons, resCandlestick];
