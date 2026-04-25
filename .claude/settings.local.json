@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node index.js)"
+      "Bash(node index.js)",
+      "Bash(sshpass *)",
+      "Bash(ssh *)",
+      "Bash(python *)"
     ]
   }
 }

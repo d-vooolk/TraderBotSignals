@@ -25,10 +25,6 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
       return await getUndefinedCoinNotification(context, coinSymbol);
     }
 
-    if (futuresData && !spotData) {
-      return;
-    }
-
     const [chartUrl, message, buttons] = await getSendData(coinSymbol, spotData, futuresData, changePriceSignal);
 
     context.telegram.sendPhoto(chat_id, chartUrl, {
