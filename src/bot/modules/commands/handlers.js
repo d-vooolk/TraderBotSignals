@@ -7,21 +7,21 @@ export const settingsHandler = (context) => {
     context.reply(MENU_TITLE, {reply_markup: buildMainKeyboard()});
 };
 
+const toMsk = (iso) => {
+    const d = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 16).replace('T', ' ') + ' MSK';
+};
+
 export const statusHandler = async (context) => {
     const ws      = wsStatus.running ? '✅ Работает' : '❌ Остановлен';
     const history = readHistory();
     const last    = history[history.length - 1];
 
-    const lastCandle = wsStatus.lastCandleAt
-        ? wsStatus.lastCandleAt.slice(0, 19).replace('T', ' ') + ' UTC'
-        : 'нет данных';
-
-    const lastSignal = wsStatus.lastSignalAt
-        ? wsStatus.lastSignalAt.slice(0, 19).replace('T', ' ') + ' UTC'
-        : 'нет сигналов';
+    const lastCandle = wsStatus.lastCandleAt ? toMsk(wsStatus.lastCandleAt) : 'нет данных';
+    const lastSignal = wsStatus.lastSignalAt ? toMsk(wsStatus.lastSignalAt) : 'нет сигналов';
 
     const lastTrade = last
-        ? `\n🕐 Последняя сделка: *${last.coinSymbol}* ${last.direction === 'up' ? '📈' : '📉'} — ${last.timestamp.slice(0, 16).replace('T', ' ')}`
+        ? `\n🕐 Последняя сделка: *${last.coinSymbol}* ${last.direction === 'up' ? '📈' : '📉'} — ${toMsk(last.timestamp)}`
         : '';
 
     const pnl = await getDailyPnl();
