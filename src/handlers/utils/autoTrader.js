@@ -229,7 +229,8 @@ export const autoTrader = {
         telegram,
         result.algoIds ?? [],
         (pnl, closeReason) => onTradeClosed(pnl, closeReason, coinSymbol, telegram),
-        true, // silent — авто-трейдер сам шлёт уведомление о закрытии
+        true,
+        { side, fillPrice: result.fillPrice, slAlgoId: result.namedAlgoIds?.sl },
       );
 
     } catch (err) {

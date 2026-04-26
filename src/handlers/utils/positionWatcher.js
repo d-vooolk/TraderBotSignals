@@ -1,17 +1,19 @@
-import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary } from '../../api/binanceTradingApi.js';
+import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary, placeSLAtBreakeven } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
 import { markSlHit } from './slCooldown.js';
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WATCH_MS = 48 * 60 * 60 * 1000;
 
-export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = null, silent = false) => {
+export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = null, silent = false, breakEvenData = null) => {
   const chatId = SETTINGS.savedChatId;
   if (!chatId) return;
 
   let hasSeenPosition = false;
-  let openTime = null;
-  const startTime = Date.now();
+  let openTime        = null;
+  let openQty         = 0;
+  let breakEvenMoved  = false;
+  const startTime     = Date.now();
 
   const interval = setInterval(async () => {
     try {
@@ -26,7 +28,33 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
         if (!hasSeenPosition) {
           hasSeenPosition = true;
           openTime = Date.now();
+          openQty  = Math.abs(parseFloat(position.positionAmt));
         }
+
+        // Детектируем срабатывание TP1: объём упал примерно на 40%
+        if (!breakEvenMoved && breakEvenData && openQty > 0) {
+          const currentQty = Math.abs(parseFloat(position.positionAmt));
+          if (currentQty > 0 && currentQty < openQty * 0.7) {
+            breakEvenMoved = true;
+            try {
+              await placeSLAtBreakeven(
+                symbol,
+                breakEvenData.side,
+                breakEvenData.fillPrice,
+                currentQty,
+                breakEvenData.slAlgoId,
+              );
+              telegram.sendMessage(
+                chatId,
+                `🔄 <b>${symbol}</b>: TP1 взят — SL перенесён в безубыток`,
+                { parse_mode: 'HTML' }
+              ).catch(() => {});
+            } catch (err) {
+              console.error('breakeven SL error:', symbol, err?.message);
+            }
+          }
+        }
+
         return;
       }
 
