@@ -98,16 +98,19 @@ export const placeTradeWithSLTP = async ({
     ? { positionSide: closePosSide }
     : { reduceOnly: 'true' };
 
-  const lotFilter   = info?.filters?.find(f => f.filterType === 'LOT_SIZE');
-  const priceFilter = info?.filters?.find(f => f.filterType === 'PRICE_FILTER');
-  const stepSize = parseFloat(lotFilter?.stepSize  ?? '0.001');
-  const tickSize = parseFloat(priceFilter?.tickSize ?? '0.01');
+  // Используем quantityPrecision/pricePrecision напрямую — это авторитетные значения для -1111
+  const qtyDec   = info?.quantityPrecision ?? 3;
+  const priceDec = info?.pricePrecision    ?? 2;
 
-  const fmtQty   = (v) => roundToStep(v, stepSize);
-  const fmtPrice = (v) => roundToStep(v, tickSize);
+  const floorTo = (v, dec) => {
+    const f = Math.pow(10, dec);
+    return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(dec));
+  };
+  const fmtQty   = (v) => floorTo(v, qtyDec);
+  const fmtPrice = (v) => floorTo(v, priceDec);
 
   const quantity = fmtQty((usdtMargin * leverage) / entryPrice);
-  console.log('[placeTradeWithSLTP]', symbol, 'qty:', quantity, 'step:', stepSize, 'tick:', tickSize, 'raw:', (usdtMargin * leverage) / entryPrice);
+  console.log('[placeTradeWithSLTP]', symbol, 'qty:', quantity, 'qtyDec:', qtyDec, 'priceDec:', priceDec);
 
   if (quantity <= 0) throw new Error('Размер позиции 0. Увеличь маржу или плечо.');
   if (quantity * entryPrice < 20) throw new Error(`Номинал позиции $${(quantity * entryPrice).toFixed(2)} < минимума $20. Увеличь маржу или плечо.`);
@@ -346,9 +349,11 @@ export const placeSLAtBreakeven = async (symbol, side, fillPrice, remainingQty, 
     ? { positionSide: closePosSide }
     : { reduceOnly: 'true' };
 
-  const priceFilter = info?.filters?.find(f => f.filterType === 'PRICE_FILTER');
-  const tickSize    = parseFloat(priceFilter?.tickSize ?? '0.01');
-  const fmtPrice    = (v) => roundToStep(v, tickSize);
+  const priceDec = info?.pricePrecision ?? 2;
+  const fmtPrice = (v) => {
+    const f = Math.pow(10, priceDec);
+    return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(priceDec));
+  };
 
   const triggerPrice = fmtPrice(fillPrice);
   const limitPrice   = fmtPrice(isLong ? fillPrice * 0.998 : fillPrice * 1.002);
