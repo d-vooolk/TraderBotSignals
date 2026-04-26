@@ -1,5 +1,5 @@
 import { SETTINGS } from '../../settings.js';
-import { placeTradeWithSLTP, getUsdtBalance, getOpenPosition, closePositionMarket } from '../../api/binanceTradingApi.js';
+import { placeTradeWithSLTP, getUsdtBalance, getOpenPosition, getOpenPositions, closePositionMarket } from '../../api/binanceTradingApi.js';
 import { getBinanceFuturesPrice } from '../../api/binanceApi.js';
 import { logTrade } from './tradeHistory.js';
 import { startPositionWatcher } from './positionWatcher.js';
@@ -161,12 +161,14 @@ export const autoTrader = {
     const chatId = SETTINGS.savedChatId;
 
     try {
-      const [balance, existing] = await Promise.all([
+      const [balance, existing, allPositions] = await Promise.all([
         getUsdtBalance(),
         getOpenPosition(`${coinSymbol.toUpperCase()}USDT`),
+        getOpenPositions(),
       ]);
       if (balance < 5) return;
       if (existing) return;
+      if (allPositions.length >= (SETTINGS.autoTrade.maxPositions ?? 5)) return;
 
       // Используем цену из WebSocket — она уже актуальна, API запрос не нужен
       let entryPrice = currentPrice;

@@ -42,6 +42,7 @@ export const DEFAULT_SETTINGS = {
     leverage: 5,
     depositPercent: 10,
     dailyStopLoss: 10,
+    maxPositions: 5,
   },
   savedChatId: null,
 };
