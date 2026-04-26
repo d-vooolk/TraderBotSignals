@@ -60,6 +60,8 @@ const unpinStatusMessage = async (telegram) => {
   if (!tg || !chatId || !_pinnedMsgId) return;
   try {
     await tg.editMessageText(chatId, _pinnedMsgId, undefined, buildPinnedText(false), { parse_mode: 'HTML' });
+  } catch {}
+  try {
     await tg.unpinChatMessage(chatId, _pinnedMsgId);
   } catch {}
   _pinnedMsgId = null;
