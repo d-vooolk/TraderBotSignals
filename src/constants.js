@@ -23,6 +23,8 @@ export const DEFAULT_SETTINGS = {
   trade: {
     leverage: 5,
     depositPercent: 10,
+    slPercent: 2,
+    tpPercent: 4,
   },
   savedChatId: null,
 };

@@ -24,12 +24,18 @@ export const MESSAGES_TEXT = {
 export const BOT_COMMANDS_DATA = {
     update: /^update_(.+)$/,
     openTrade: /^openTrade_(.+)$/,
-    setInterval: 'set_interval',
-    setPercents: 'set_percent',
-    showSettings: 'show_settings',
-}
+    settingsMenu: 'settings_menu',
+    settingsShowSub: /^settings_show_(.+)$/,
+    settingsSetDeposit: /^settings_set_deposit_(.+)$/,
+    settingsSetLeverage: /^settings_set_leverage_(.+)$/,
+    settingsSetSltp: /^settings_set_sltp_(.+)$/,
+};
 
-export const VALID_CANDLES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
+export const SETTINGS_OPTIONS = {
+    deposits:   [5, 10, 15, 20, 25, 50],
+    leverages:  [2, 3, 5, 10, 15, 20],
+    sltpPairs:  [[1, 2], [1.5, 3], [2, 4], [2, 6], [3, 6], [3, 9]],
+};
 
 export const COMMANDS_LIST = [
     { command: "settings", description: "Список настроек" },

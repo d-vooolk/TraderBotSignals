@@ -22,11 +22,13 @@ export const handleTradeCallback = async (context) => {
     const side       = trade.direction === 'up' ? 'BUY' : 'SELL';
 
     const result = await placeTradeWithSLTP({
-      symbol:      `${trade.coinSymbol}USDT`,
+      symbol:     `${trade.coinSymbol}USDT`,
       side,
-      entryPrice:  trade.entryPrice,
+      entryPrice: trade.entryPrice,
       usdtMargin,
-      leverage:    SETTINGS.trade.leverage,
+      leverage:   SETTINGS.trade.leverage,
+      slPercent:  SETTINGS.trade.slPercent,
+      tpPercent:  SETTINGS.trade.tpPercent,
     });
 
     tradeStore.delete(tradeId);
@@ -38,8 +40,8 @@ export const handleTradeCallback = async (context) => {
       `📊 Кол-во: <code>${result.quantity}</code>\n` +
       `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${SETTINGS.trade.leverage}x)\n` +
       `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
-      `🛑 SL: <code>$${result.slPrice}</code>  (-2%)\n` +
-      `🎯 TP: <code>$${result.tpPrice}</code>  (+4%)`,
+      `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)\n` +
+      `🎯 TP: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%)`,
       {parse_mode: 'HTML'}
     );
   } catch (err) {

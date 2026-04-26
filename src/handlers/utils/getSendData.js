@@ -1,6 +1,7 @@
 import {formatCoinResponse} from "../handleCoinPriceRequest/formatResponse.js";
 import {getCandlestickData, getFuturesCandlestickData} from "../../api/binanceApi.js";
 import {candlestickParams} from "../constants/candlestick.js";
+import {SETTINGS} from "../../settings.js";
 import {generateChartURL} from "../handleCoinPriceRequest/generateCandlestickChart.js";
 import {generateButtons} from "./generateButtons.js";
 import {Markup} from "telegraf";
@@ -26,12 +27,13 @@ export const getSendData = async (
     const rawPrice = parseFloat(spotData?.price) || parseFloat(futuresData?.price);
     if (rawPrice && !isNaN(rawPrice)) {
       const isLong = direction === 'up';
+      const {slPercent, tpPercent} = SETTINGS.trade;
       tradeParams = {
         direction,
         entryPrice: rawPrice,
-        slPrice:    isLong ? rawPrice * 0.98 : rawPrice * 1.02,
-        tp1Price:   isLong ? rawPrice * 1.02 : rawPrice * 0.98,
-        tpPrice:    isLong ? rawPrice * 1.04 : rawPrice * 0.96,
+        slPrice:  isLong ? rawPrice * (1 - slPercent / 100) : rawPrice * (1 + slPercent / 100),
+        tp1Price: isLong ? rawPrice * (1 + slPercent / 100) : rawPrice * (1 - slPercent / 100),
+        tpPrice:  isLong ? rawPrice * (1 + tpPercent / 100) : rawPrice * (1 - tpPercent / 100),
       };
     }
   }

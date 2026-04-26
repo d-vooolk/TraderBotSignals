@@ -48,7 +48,7 @@ export const getUsdtBalance = async () => {
   return parseFloat(asset?.availableBalance ?? 0);
 };
 
-export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin, leverage }) => {
+export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin, leverage, slPercent = 2, tpPercent = 4 }) => {
   const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
 
   // 1. Выставляем плечо
@@ -74,8 +74,8 @@ export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin,
 
   const fillPrice = parseFloat(order.avgPrice) || entryPrice;
   const isLong    = side === 'BUY';
-  const actualSL  = fmtPrice(isLong ? fillPrice * 0.98 : fillPrice * 1.02);
-  const actualTP  = fmtPrice(isLong ? fillPrice * 1.04 : fillPrice * 0.96);
+  const actualSL  = fmtPrice(isLong ? fillPrice * (1 - slPercent / 100) : fillPrice * (1 + slPercent / 100));
+  const actualTP  = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100) : fillPrice * (1 - tpPercent / 100));
 
   // 5. Стоп-лосс
   await authRequest('POST', '/fapi/v1/order', {
