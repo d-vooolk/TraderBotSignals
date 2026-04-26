@@ -22,7 +22,10 @@
       "Bash(node *)",
       "Bash(xargs grep *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(apt-get install *)",
+      "PowerShell(Install-Module -Name Posh-SSH -Force -Scope CurrentUser -SkipPublisherCheck 2>&1 | Select-Object -Last 5)",
+      "PowerShell(Install-Module -Name Posh-SSH -Force -Scope CurrentUser 2>&1 | Select-Object -Last 3)"
     ]
   }
 }

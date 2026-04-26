@@ -56,7 +56,7 @@ const getSymbolInfo = async (symbol) => {
 };
 
 const roundToStep = (value, step) => {
-  const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+  const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-10));
   return parseFloat((Math.floor(value / step) * step).toFixed(decimals));
 };
 
