@@ -28,6 +28,10 @@ bot.telegram.setMyCommands(COMMANDS_LIST)
 setupCommands(bot);
 setupActions(bot);
 
+bot.catch((err, ctx) => {
+    console.error("Ошибка при обработке обновления:", err?.message || err);
+});
+
 bot.on("message", (ctx) => {
     if (ctx?.chat?.id && !SETTINGS?.savedChatId) {
         setChatId(ctx?.chat?.id);
