@@ -3,6 +3,7 @@ import {fetchFuturesSymbols, getFuturesCandlestickData} from "../../api/binanceA
 import {handleCoinPriceRequest} from "../../handlers/handleCoinPriceRequest/handleCoinPriceRequest.js";
 import {SETTINGS} from "../../settings.js";
 import {isSlCoolingDown} from "../../handlers/utils/slCooldown.js";
+import {autoTrader} from "../../handlers/utils/autoTrader.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
 
@@ -141,10 +142,17 @@ export const startWebSocket = async (bot) => {
     signalCooldown[symbol] = now;
 
     wsStatus.lastSignalAt = new Date().toISOString();
+    const coinSymbol = symbol.slice(0, -4);
     console.info(`🚀 [ALERT] ${symbol.toUpperCase()} ${dirEmoji} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
 
     if (bot && SETTINGS.savedChatId) {
-      handleCoinPriceRequest(bot, SETTINGS.savedChatId, symbol.slice(0, -4), absChange.toFixed(2), direction);
+      if (autoTrader.isEnabled()) {
+        // Автотрейдинг: исполняем без сигнального сообщения
+        autoTrader.execute(coinSymbol, direction, bot.telegram);
+      } else {
+        // Ручной режим: отправляем сигнал с кнопкой
+        handleCoinPriceRequest(bot, SETTINGS.savedChatId, coinSymbol, absChange.toFixed(2), direction);
+      }
     }
 
     data.lastChange = absChange;

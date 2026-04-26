@@ -5,7 +5,7 @@ import { markSlHit } from './slCooldown.js';
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WATCH_MS = 48 * 60 * 60 * 1000;
 
-export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
+export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = null, silent = false) => {
   const chatId = SETTINGS.savedChatId;
   if (!chatId) return;
 
@@ -45,18 +45,21 @@ export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
         markSlHit(symbol, cooldownMs);
       }
 
-      const pnlStr = pnl !== null
-        ? `\n💰 PnL: <code>${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT</code> ${pnl >= 0 ? '✅' : '❌'}`
-        : '';
-      const reasonStr = closeReason
-        ? `\n📋 Причина: ${closeReason}`
-        : '';
+      if (onClose) {
+        await onClose(pnl, closeReason);
+      }
 
-      await telegram.sendMessage(
-        chatId,
-        `🔔 <b>Позиция ${symbol} закрыта</b>${reasonStr}${pnlStr}`,
-        { parse_mode: 'HTML' }
-      );
+      if (!silent) {
+        const pnlStr = pnl !== null
+          ? `\n💰 PnL: <code>${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT</code> ${pnl >= 0 ? '✅' : '❌'}`
+          : '';
+        const reasonStr = closeReason ? `\n📋 Причина: ${closeReason}` : '';
+        await telegram.sendMessage(
+          chatId,
+          `🔔 <b>Позиция ${symbol} закрыта</b>${reasonStr}${pnlStr}`,
+          { parse_mode: 'HTML' }
+        );
+      }
     } catch (err) {
       console.error('positionWatcher error:', err?.message);
     }

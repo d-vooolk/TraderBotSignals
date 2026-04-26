@@ -1,6 +1,8 @@
-import {buildMainKeyboard, MENU_TITLE} from "../settingsKeyboards.js";
+import {buildMainKeyboard, MENU_TITLE, buildAutoTradeKeyboard} from "../settingsKeyboards.js";
 import {wsStatus} from "../websocket.js";
 import {getDailyPnl, getOpenPositions} from "../../../api/binanceTradingApi.js";
+import {SETTINGS} from "../../../settings.js";
+import {autoTrader} from "../../../handlers/utils/autoTrader.js";
 
 export const settingsHandler = (context) => {
     context.reply(MENU_TITLE, {reply_markup: buildMainKeyboard()});
@@ -41,6 +43,27 @@ export const positionsHandler = async (context) => {
         `📊 *Позиции (${positions.length})*\n\n` + lines.join('\n\n'),
         { parse_mode: 'Markdown' }
     );
+};
+
+export const autoTradeHandler = (context) => {
+  const enabled  = autoTrader.isEnabled();
+  const stopHit  = autoTrader.isStopHit();
+  const pnl      = autoTrader.getDailyPnl();
+  const earned   = autoTrader.getDailyEarned();
+  const lost     = autoTrader.getDailyLost();
+  const { leverage, depositPercent, dailyStopLoss } = SETTINGS.autoTrade;
+  const statusLine = stopHit
+    ? '⛔ Остановлен (лимит убытка)'
+    : enabled ? '✅ Работает' : '⏸ Остановлен';
+  const pnlSign = pnl >= 0 ? '+' : '';
+  const text =
+    `<b>🤖 Автотрейдинг</b>\n\n` +
+    `Статус: ${statusLine}\n` +
+    `Заработано: <code>+$${earned.toFixed(2)}</code>  Потеряно: <code>-$${lost.toFixed(2)}</code>\n` +
+    `Итого: <code>${pnlSign}$${pnl.toFixed(2)}</code>\n\n` +
+    `Плечо: <b>${leverage}x</b> | Позиция: <b>${depositPercent}%</b> | Стоп: <b>$${dailyStopLoss}</b>\n` +
+    `SL/TP берутся из ручных настроек`;
+  context.reply(text, {reply_markup: buildAutoTradeKeyboard(), parse_mode: 'HTML'});
 };
 
 export const statusHandler = async (context) => {

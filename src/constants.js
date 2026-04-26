@@ -33,5 +33,10 @@ export const DEFAULT_SETTINGS = {
     trailingStop: false,
     limitEntry: false,
   },
+  autoTrade: {
+    leverage: 5,
+    depositPercent: 10,
+    dailyStopLoss: 10,
+  },
   savedChatId: null,
 };
