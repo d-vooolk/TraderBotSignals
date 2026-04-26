@@ -2,6 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 
 const BASE = 'https://fapi.binance.com';
+const api  = axios.create({timeout: 5000});
 
 let symbolsCache = null;
 let symbolsCacheTime = 0;
@@ -18,19 +19,19 @@ const authRequest = async (method, path, params = {}) => {
   const body = new URLSearchParams(p).toString();
 
   if (method === 'POST') {
-    const res = await axios.post(`${BASE}${path}`, body, {
+    const res = await api.post(`${BASE}${path}`, body, {
       headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     return res.data;
   }
-  const res = await axios.get(`${BASE}${path}?${body}`, { headers });
+  const res = await api.get(`${BASE}${path}?${body}`, { headers });
   return res.data;
 };
 
 const getSymbolInfo = async (symbol) => {
   const now = Date.now();
   if (!symbolsCache || now - symbolsCacheTime > 3_600_000) {
-    const res = await axios.get(`${BASE}/fapi/v1/exchangeInfo`);
+    const res = await api.get(`${BASE}/fapi/v1/exchangeInfo`);
     symbolsCache = res.data.symbols;
     symbolsCacheTime = now;
   }
@@ -90,4 +91,13 @@ export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin,
   });
 
   return { quantity, fillPrice, slPrice: actualSL, tpPrice: actualTP };
+};
+
+export const getOpenPosition = async (symbol) => {
+  try {
+    const data = await authRequest('GET', '/fapi/v2/positionRisk', {symbol});
+    return data?.find(p => parseFloat(p.positionAmt) !== 0) ?? null;
+  } catch {
+    return null;
+  }
 };

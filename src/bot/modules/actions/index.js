@@ -1,5 +1,5 @@
 import {handleUpdateCallback} from "../../../handlers/handleUpdateData/handleUpdateData.js";
-import {handleTradeCallback} from "../../../handlers/handleUpdateData/handleTradeCallback.js";
+import {handleTradeCallback, handleConfirmTradeCallback, handleCancelTradeCallback} from "../../../handlers/handleUpdateData/handleTradeCallback.js";
 import {BOT_COMMANDS_DATA} from "../commands/constants.js";
 import {SETTINGS, saveSettings} from "../../../settings.js";
 import {buildMainKeyboard, buildSubKeyboard, MENU_TITLE, SUB_TITLES} from "../settingsKeyboards.js";
@@ -21,6 +21,16 @@ export const setupActions = (bot) => {
       console.error('Ошибка при открытии сделки:', e);
       await ctx.reply('❌ Ошибка при открытии сделки.');
     }
+  });
+
+  bot.action(BOT_COMMANDS_DATA.confirmTrade, async (ctx) => {
+    try { await handleConfirmTradeCallback(ctx); }
+    catch (e) { await ctx.reply('❌ Ошибка при открытии сделки.'); }
+  });
+
+  bot.action(BOT_COMMANDS_DATA.cancelTrade, async (ctx) => {
+    try { await handleCancelTradeCallback(ctx); }
+    catch (e) { await ctx.answerCbQuery(); }
   });
 
   bot.action(BOT_COMMANDS_DATA.settingsMenu, async (ctx) => {

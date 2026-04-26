@@ -1,5 +1,6 @@
 export const COMMANDS = {
     settings: 'settings',
+    status:   'status',
     short: 's',
     long: 'l',
 }
@@ -29,6 +30,8 @@ export const BOT_COMMANDS_DATA = {
     settingsSetDeposit: /^settings_set_deposit_(.+)$/,
     settingsSetLeverage: /^settings_set_leverage_(.+)$/,
     settingsSetSltp: /^settings_set_sltp_(.+)$/,
+    confirmTrade: /^confirmTrade_(.+)$/,
+    cancelTrade:  /^cancelTrade_(.+)$/,
 };
 
 export const SETTINGS_OPTIONS = {
@@ -38,7 +41,8 @@ export const SETTINGS_OPTIONS = {
 };
 
 export const COMMANDS_LIST = [
-    { command: "settings", description: "Список настроек" },
+    { command: "settings", description: "Настройки бота" },
+    { command: "status",   description: "Статус бота" },
     { command: "s", description: "Идти в шорт" },
     { command: "l", description: "Идти в лонг" },
 ];

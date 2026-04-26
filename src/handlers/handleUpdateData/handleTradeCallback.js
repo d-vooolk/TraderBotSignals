@@ -1,52 +1,125 @@
 import {tradeStore} from "../utils/tradeStore.js";
-import {placeTradeWithSLTP, getUsdtBalance} from "../../api/binanceTradingApi.js";
+import {placeTradeWithSLTP, getUsdtBalance, getOpenPosition} from "../../api/binanceTradingApi.js";
+import {logTrade} from "../utils/tradeHistory.js";
 import {SETTINGS} from "../../settings.js";
 
-export const handleTradeCallback = async (context) => {
-  const tradeId = context.match?.[1];
+const LARGE_POSITION_THRESHOLD = 25; // % — выше этого показываем предупреждение
+
+const executeOpenTrade = async (ctx, trade) => {
+  const balance = await getUsdtBalance();
+  if (balance < 5) {
+    return ctx.reply("❌ Недостаточно USDT на фьючерсном балансе.");
+  }
+
+  const existing = await getOpenPosition(`${trade.coinSymbol}USDT`);
+  if (existing) {
+    return ctx.reply(
+      `⚠️ По *${trade.coinSymbol}* уже есть открытая позиция (${existing.positionAmt} контрактов).\nЗакрой её перед открытием новой.`,
+      {parse_mode: 'Markdown'}
+    );
+  }
+
+  const usdtMargin = balance * (SETTINGS.trade.depositPercent / 100);
+  const side       = trade.direction === 'up' ? 'BUY' : 'SELL';
+
+  const result = await placeTradeWithSLTP({
+    symbol:     `${trade.coinSymbol}USDT`,
+    side,
+    entryPrice: trade.entryPrice,
+    usdtMargin,
+    leverage:   SETTINGS.trade.leverage,
+    slPercent:  SETTINGS.trade.slPercent,
+    tpPercent:  SETTINGS.trade.tpPercent,
+  });
+
+  logTrade({
+    coinSymbol: trade.coinSymbol,
+    direction:  trade.direction,
+    side,
+    fillPrice:  result.fillPrice,
+    slPrice:    result.slPrice,
+    tpPrice:    result.tpPrice,
+    quantity:   result.quantity,
+    margin:     usdtMargin,
+    leverage:   SETTINGS.trade.leverage,
+  });
+
+  const emoji = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
+  await ctx.reply(
+    `✅ <b>Позиция открыта!</b>\n\n` +
+    `${emoji} <b>${trade.coinSymbol}</b>\n` +
+    `📊 Кол-во: <code>${result.quantity}</code>\n` +
+    `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${SETTINGS.trade.leverage}x)\n` +
+    `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
+    `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)\n` +
+    `🎯 TP: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%)`,
+    {parse_mode: 'HTML'}
+  );
+};
+
+export const handleTradeCallback = async (ctx) => {
+  const tradeId = ctx.match?.[1];
   const trade   = tradeStore.get(tradeId);
 
   if (!trade) {
-    return context.answerCbQuery("❌ Сигнал устарел. Дождитесь нового.", {show_alert: true});
+    return ctx.answerCbQuery("❌ Сигнал устарел. Дождитесь нового.", {show_alert: true});
   }
 
-  await context.answerCbQuery("⏳ Открываю позицию...");
-
-  try {
-    const balance = await getUsdtBalance();
-    if (balance < 5) {
-      return context.reply("❌ Недостаточно USDT на фьючерсном балансе.");
-    }
-
-    const usdtMargin = balance * (SETTINGS.trade.depositPercent / 100);
-    const side       = trade.direction === 'up' ? 'BUY' : 'SELL';
-
-    const result = await placeTradeWithSLTP({
-      symbol:     `${trade.coinSymbol}USDT`,
-      side,
-      entryPrice: trade.entryPrice,
-      usdtMargin,
-      leverage:   SETTINGS.trade.leverage,
-      slPercent:  SETTINGS.trade.slPercent,
-      tpPercent:  SETTINGS.trade.tpPercent,
-    });
-
-    tradeStore.delete(tradeId);
-
-    const emoji = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
-    await context.reply(
-      `✅ <b>Позиция открыта!</b>\n\n` +
-      `${emoji} <b>${trade.coinSymbol}</b>\n` +
-      `📊 Кол-во: <code>${result.quantity}</code>\n` +
-      `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${SETTINGS.trade.leverage}x)\n` +
-      `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
-      `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)\n` +
-      `🎯 TP: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%)`,
-      {parse_mode: 'HTML'}
+  if (SETTINGS.trade.depositPercent >= LARGE_POSITION_THRESHOLD) {
+    await ctx.answerCbQuery();
+    const balance    = await getUsdtBalance();
+    const margin     = (balance * SETTINGS.trade.depositPercent / 100).toFixed(2);
+    const dirLabel   = trade.direction === 'up' ? '🟩 LONG' : '🟥 SHORT';
+    return ctx.reply(
+      `⚠️ *Подтверди сделку*\n\n` +
+      `${dirLabel} *${trade.coinSymbol}*\n` +
+      `Маржа: *$${margin}* (${SETTINGS.trade.depositPercent}% баланса × ${SETTINGS.trade.leverage}x)\n\n` +
+      `Нажми «Подтвердить» чтобы открыть позицию.`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[
+            {text: '✅ Подтвердить', callback_data: `confirmTrade_${tradeId}`},
+            {text: '❌ Отмена',      callback_data: `cancelTrade_${tradeId}`},
+          ]],
+        },
+      }
     );
+  }
+
+  await ctx.answerCbQuery("⏳ Открываю позицию...");
+  try {
+    await executeOpenTrade(ctx, trade);
+    tradeStore.delete(tradeId); // удаляем только после успеха
   } catch (err) {
     console.error("Ошибка при открытии позиции:", err?.response?.data || err.message);
     const msg = err?.response?.data?.msg || err.message || "Неизвестная ошибка";
-    await context.reply(`❌ Ошибка открытия позиции: ${msg}`);
+    await ctx.reply(`❌ Ошибка открытия позиции: ${msg}`);
   }
+};
+
+export const handleConfirmTradeCallback = async (ctx) => {
+  const tradeId = ctx.match?.[1];
+  const trade   = tradeStore.get(tradeId);
+
+  if (!trade) {
+    return ctx.answerCbQuery("❌ Сигнал устарел.", {show_alert: true});
+  }
+
+  await ctx.answerCbQuery("⏳ Открываю позицию...");
+  try {
+    await executeOpenTrade(ctx, trade);
+    tradeStore.delete(tradeId);
+  } catch (err) {
+    console.error("Ошибка при открытии позиции:", err?.response?.data || err.message);
+    const msg = err?.response?.data?.msg || err.message || "Неизвестная ошибка";
+    await ctx.reply(`❌ Ошибка открытия позиции: ${msg}`);
+  }
+};
+
+export const handleCancelTradeCallback = async (ctx) => {
+  const tradeId = ctx.match?.[1];
+  tradeStore.delete(tradeId);
+  await ctx.answerCbQuery("❌ Сделка отменена.");
+  await ctx.editMessageReplyMarkup({inline_keyboard: []});
 };

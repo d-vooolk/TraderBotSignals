@@ -15,7 +15,7 @@ export const generateButtons = (coinSymbol, tradeParams = null) => {
   ];
 
   if (tradeParams && hasApiKeys()) {
-    const tradeId = Math.random().toString(36).slice(2, 8);
+    const tradeId = crypto.randomUUID();
     const label   = tradeParams.direction === 'up'
       ? `✅ LONG ${SETTINGS.trade.leverage}x`
       : `✅ SHORT ${SETTINGS.trade.leverage}x`;

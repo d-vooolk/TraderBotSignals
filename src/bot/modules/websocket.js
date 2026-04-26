@@ -5,6 +5,8 @@ import {SETTINGS} from "../../settings.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
 
+export const wsStatus = {running: false, symbolsCount: 0, lastSignalAt: null};
+
 const calculateRSI = (closes, period = 14) => {
   if (closes.length < period + 1) return 50;
   const recent = closes.slice(-(period + 1));
@@ -39,6 +41,7 @@ export const startWebSocket = async (bot) => {
 
   const symbols = await fetchFuturesSymbols();
   if (symbols.length === 0) return console.error("❌ Список монет пуст, WebSocket не запущен.");
+  wsStatus.symbolsCount = symbols.length;
 
   const batchSize = 200;
   const batches = [];
@@ -106,6 +109,7 @@ export const startWebSocket = async (bot) => {
     const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
     if (!confirmed) return;
 
+    wsStatus.lastSignalAt = new Date().toISOString();
     console.info(`🚀 [ALERT] ${symbol.toUpperCase()} ${dirEmoji} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
 
     if (bot && SETTINGS.savedChatId) {
@@ -116,29 +120,39 @@ export const startWebSocket = async (bot) => {
   };
 
   const connectWebSocket = (symbolsBatch, index) => {
-    console.info(`🔗 Подключение WebSocket №${index + 1}... (${symbolsBatch.length} монет)`);
+    let attempt = 0;
 
-    const streams = symbolsBatch.map((s) => `${s.toLowerCase()}@kline_${SETTINGS.handler.temporaryCandle}`).join("/");
-    const ws = new WebSocket(getWsUrl(streams));
+    const connect = () => {
+      console.info(`🔗 Подключение WebSocket №${index + 1}... (попытка ${attempt + 1})`);
+      const streams = symbolsBatch.map((s) => `${s.toLowerCase()}@kline_${SETTINGS.handler.temporaryCandle}`).join("/");
+      const ws = new WebSocket(getWsUrl(streams));
 
-    const handleMessage = (message) => {
-      try {
-        const data = JSON.parse(message);
-        if (data?.data?.k) {
-          processCandle(data.data.s.toLowerCase(), data.data.k);
+      ws.addEventListener("open", () => {
+        attempt = 0;
+        wsStatus.running = true;
+        console.info(`✅ WebSocket ${index + 1} на ${symbolsBatch.length} монет открыт.`);
+      });
+
+      ws.addEventListener("error", (error) => console.error(`❌ Ошибка WebSocket ${index + 1}:`, error));
+
+      ws.addEventListener("message", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data?.data?.k) processCandle(data.data.s.toLowerCase(), data.data.k);
+        } catch (error) {
+          console.error("❌ Ошибка парсинга сообщения:", error);
         }
-      } catch (error) {
-        console.error("❌ Ошибка парсинга сообщения:", error);
-      }
+      });
+
+      ws.addEventListener("close", () => {
+        const delay = Math.min(1000 * 2 ** attempt, 60_000);
+        console.info(`🔄 WebSocket ${index + 1} закрылся. Перезапуск через ${delay / 1000}s...`);
+        attempt++;
+        setTimeout(connect, delay);
+      });
     };
 
-    ws.addEventListener("open",    () => console.info(`✅ WebSocket ${index + 1} на ${symbolsBatch.length} монет открыт.`));
-    ws.addEventListener("error",   (error) => console.error(`❌ Ошибка WebSocket ${index + 1}:`, error));
-    ws.addEventListener("message", (event) => handleMessage(event.data));
-    ws.addEventListener("close",   () => {
-      console.info(`🔄 WebSocket ${index + 1} закрылся. Перезапуск через 5 секунд...`);
-      setTimeout(() => connectWebSocket(symbolsBatch, index), 5000);
-    });
+    connect();
   };
 
   batches.forEach((batch, index) => connectWebSocket(batch, index));

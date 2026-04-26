@@ -1,8 +1,10 @@
 import axios from 'axios';
 
+const api = axios.create({timeout: 5000});
+
 export async function getBinanceSpotPrice(symbol) {
   try {
-    const response = await axios.get(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}USDT`);
+    const response = await api.get(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}USDT`);
 
     const data = response?.data;
     if (data) {
@@ -25,7 +27,7 @@ export async function getBinanceSpotPrice(symbol) {
 
 export async function getCandlestickData(params) {
   try {
-    const response = await axios.get(`https://api.binance.com/api/v3/klines`, {params});
+    const response = await api.get(`https://api.binance.com/api/v3/klines`, {params});
 
     return response?.data;
   } catch (error) {
@@ -36,7 +38,7 @@ export async function getCandlestickData(params) {
 
 export async function getBinanceFuturesPrice(symbol) {
   try {
-    const response = await axios.get(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}USDT`);
+    const response = await api.get(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}USDT`);
 
     const data = response?.data;
     if (data) {
@@ -58,7 +60,7 @@ export async function getBinanceFuturesPrice(symbol) {
 
 export async function getFuturesCandlestickData(params) {
   try {
-    const response = await axios.get('https://fapi.binance.com/fapi/v1/klines', {params});
+    const response = await api.get('https://fapi.binance.com/fapi/v1/klines', {params});
     return response?.data;
   } catch (error) {
     return null;
@@ -68,7 +70,7 @@ export async function getFuturesCandlestickData(params) {
 export const fetchFuturesSymbols = async () => {
   console.info("📡 Запрос списка фьючерсных монет...");
   try {
-    const response = await axios.get("https://fapi.binance.com/fapi/v1/exchangeInfo");
+    const response = await api.get("https://fapi.binance.com/fapi/v1/exchangeInfo");
     const symbols = response?.data?.symbols?.map(s => s?.symbol?.toLowerCase());
     console.info(`✅ Найдено ${symbols.length} монет.`);
     return symbols;
