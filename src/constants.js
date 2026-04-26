@@ -19,6 +19,11 @@ export const DEFAULT_SETTINGS = {
   handler: {
     temporaryCandle: "15m",
     priceChangeThreshold: 3,
+    signalCooldownMin: 10,
+    slCooldownMin: 45,
+    volumeMultiplier: 2,
+    rsiOverbought: 70,
+    rsiOversold: 30,
   },
   trade: {
     leverage: 5,

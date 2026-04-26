@@ -1,5 +1,6 @@
 import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
+import { markSlHit } from './slCooldown.js';
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WATCH_MS = 48 * 60 * 60 * 1000;
@@ -37,6 +38,12 @@ export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
       await cancelAllSymbolOrders(symbol);
 
       const { pnl, closeReason } = await getSymbolCloseSummary(symbol, openTime);
+
+      const hasSL = closeReason?.includes('SL');
+      if (hasSL) {
+        const cooldownMs = (SETTINGS.handler.slCooldownMin ?? 45) * 60_000;
+        markSlHit(symbol, cooldownMs);
+      }
 
       const pnlStr = pnl !== null
         ? `\n💰 PnL: <code>${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT</code> ${pnl >= 0 ? '✅' : '❌'}`

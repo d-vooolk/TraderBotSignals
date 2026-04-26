@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import {fetchFuturesSymbols, getFuturesCandlestickData} from "../../api/binanceApi.js";
 import {handleCoinPriceRequest} from "../../handlers/handleCoinPriceRequest/handleCoinPriceRequest.js";
 import {SETTINGS} from "../../settings.js";
+import {isSlCoolingDown} from "../../handlers/utils/slCooldown.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
 
@@ -11,7 +12,6 @@ const cache1h = {};           // symbol -> { data, ts }
 const CACHE_1H_TTL = 60_000; // 60 секунд
 
 const signalCooldown = {};        // symbol -> timestamp
-const SIGNAL_COOLDOWN = 5 * 60_000; // 5 минут между сигналами на одну монету
 
 const calculateRSI = (closes, period = 14) => {
   if (closes.length < period + 1) return 50;
@@ -103,18 +103,21 @@ export const startWebSocket = async (bot) => {
     if (absChange < SETTINGS.handler.priceChangeThreshold) return;
     if (absChange < data.lastChange + SETTINGS.handler.priceChangeThreshold) return;
 
-    // 3. Фильтр объёма: текущий объём >= 1.5x среднего по предыдущим свечам
+    // 3. Фильтр объёма: текущий объём >= volumeMultiplier * среднего по предыдущим свечам
     if (data.volumes.length >= 5) {
       const prev = data.volumes.slice(0, -1);
       const avg  = prev.reduce((a, b) => a + b, 0) / prev.length;
-      if (avg > 0 && volume < 1.5 * avg) return;
+      const multiplier = SETTINGS.handler.volumeMultiplier ?? 2;
+      if (avg > 0 && volume < multiplier * avg) return;
     }
 
     // 4. RSI-фильтр: не входим в уже перекупленный/перепроданный рынок
     if (data.closes.length >= 15) {
       const rsi = calculateRSI(data.closes);
-      if (direction === 'up'   && rsi > 75) return;
-      if (direction === 'down' && rsi < 25) return;
+      const rsiOverbought = SETTINGS.handler.rsiOverbought ?? 70;
+      const rsiOversold   = SETTINGS.handler.rsiOversold   ?? 30;
+      if (direction === 'up'   && rsi > rsiOverbought) return;
+      if (direction === 'down' && rsi < rsiOversold)   return;
     }
 
     // 5. Фильтр тренда по SMA10: торгуем только по тренду
@@ -128,9 +131,13 @@ export const startWebSocket = async (bot) => {
     const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
     if (!confirmed) return;
 
-    // 7. Кулдаун: не слать повторный сигнал по той же монете в течение 5 минут
+    // 7. Пост-SL кулдаун: не входить повторно если последняя сделка закрылась в SL
+    if (isSlCoolingDown(symbol)) return;
+
+    // 8. Общий кулдаун между сигналами на одну монету
     const now = Date.now();
-    if (now - (signalCooldown[symbol] || 0) < SIGNAL_COOLDOWN) return;
+    const signalCooldownMs = (SETTINGS.handler.signalCooldownMin ?? 10) * 60_000;
+    if (now - (signalCooldown[symbol] || 0) < signalCooldownMs) return;
     signalCooldown[symbol] = now;
 
     wsStatus.lastSignalAt = new Date().toISOString();

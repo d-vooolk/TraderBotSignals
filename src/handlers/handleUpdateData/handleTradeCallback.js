@@ -3,6 +3,7 @@ import {placeTradeWithSLTP, getUsdtBalance, getOpenPosition} from "../../api/bin
 import {logTrade} from "../utils/tradeHistory.js";
 import {SETTINGS} from "../../settings.js";
 import {startPositionWatcher} from "../utils/positionWatcher.js";
+import {getBinanceFuturesPrice} from "../../api/binanceApi.js";
 
 const LARGE_POSITION_THRESHOLD = 25; // % — выше этого показываем предупреждение
 
@@ -18,6 +19,11 @@ const executeOpenTrade = async (ctx, trade) => {
       `⚠️ По *${trade.coinSymbol}* уже есть открытая позиция (${existing.positionAmt} контрактов).\nЗакрой её перед открытием новой.`,
       {parse_mode: 'Markdown'}
     );
+  }
+
+  const freshData = await getBinanceFuturesPrice(trade.coinSymbol);
+  if (freshData?.price) {
+    trade.entryPrice = parseFloat(freshData.price);
   }
 
   const usdtMargin = balance * (SETTINGS.trade.depositPercent / 100);
