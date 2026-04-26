@@ -25,6 +25,10 @@ const authRequest = async (method, path, params = {}) => {
     });
     return res.data;
   }
+  if (method === 'DELETE') {
+    const res = await api.delete(`${BASE}${path}?${body}`, { headers });
+    return res.data;
+  }
   const res = await api.get(`${BASE}${path}?${body}`, { headers });
   return res.data;
 };
@@ -236,5 +240,26 @@ export const getOpenPositions = async () => {
     return data?.filter(p => parseFloat(p.positionAmt) !== 0) ?? [];
   } catch {
     return [];
+  }
+};
+
+export const cancelAllSymbolOrders = async (symbol) => {
+  // Отменяем обычные условные ордера (STOP, TAKE_PROFIT)
+  try {
+    await authRequest('DELETE', '/fapi/v1/allOpenOrders', { symbol });
+  } catch (err) {
+    const code = err?.response?.data?.code;
+    if (code !== -2011) console.error('cancelAllOpenOrders error:', err?.response?.data || err.message);
+  }
+
+  // Отменяем algo-ордера (CONDITIONAL через /fapi/v1/algoOrder)
+  try {
+    const res = await authRequest('GET', '/fapi/v1/openAlgoOrders', { symbol });
+    const orders = res?.orders ?? [];
+    await Promise.all(orders.map(o =>
+      authRequest('DELETE', '/fapi/v1/algoOrder', { algoId: o.algoId }).catch(() => {})
+    ));
+  } catch {
+    // Endpoint может отличаться — не критично
   }
 };

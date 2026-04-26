@@ -2,6 +2,7 @@ import {tradeStore} from "../utils/tradeStore.js";
 import {placeTradeWithSLTP, getUsdtBalance, getOpenPosition} from "../../api/binanceTradingApi.js";
 import {logTrade} from "../utils/tradeHistory.js";
 import {SETTINGS} from "../../settings.js";
+import {startPositionWatcher} from "../utils/positionWatcher.js";
 
 const LARGE_POSITION_THRESHOLD = 25; // % — выше этого показываем предупреждение
 
@@ -69,6 +70,8 @@ const executeOpenTrade = async (ctx, trade) => {
       {parse_mode: 'HTML'}
     );
   }
+
+  startPositionWatcher(`${trade.coinSymbol}USDT`, ctx.telegram);
 };
 
 export const handleTradeCallback = async (ctx) => {
