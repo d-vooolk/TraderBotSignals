@@ -5,6 +5,7 @@
  * @returns {Array} массив точек SMA [{ x, y }]
  */
 export const getSMA = (candles, period) => {
+    if (!candles?.length) return [];
     return candles.map((c, i, arr) => {
         if (i < period - 1) return null;
         const slice = arr.slice(i - period + 1, i + 1);

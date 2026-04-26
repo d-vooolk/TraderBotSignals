@@ -1,5 +1,5 @@
 import {formatCoinResponse} from "../handleCoinPriceRequest/formatResponse.js";
-import {getCandlestickData} from "../../api/binanceApi.js";
+import {getCandlestickData, getFuturesCandlestickData} from "../../api/binanceApi.js";
 import {candlestickParams} from "../constants/candlestick.js";
 import {generateChartURL} from "../handleCoinPriceRequest/generateCandlestickChart.js";
 import {generateButtons} from "./generateButtons.js";
@@ -14,7 +14,10 @@ export const getSendData = async (
   limit = 60,
   direction = null,
 ) => {
-  const resCandlestick = await getCandlestickData(candlestickParams(coinSymbol, interval, limit));
+  const params = candlestickParams(coinSymbol, interval, limit);
+  const resCandlestick =
+    await getFuturesCandlestickData(params) ??
+    await getCandlestickData(params);
   const chartUrl = await generateChartURL(resCandlestick);
 
   // Рассчитываем параметры сделки один раз — используются и в сообщении и в кнопке

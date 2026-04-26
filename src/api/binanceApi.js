@@ -30,6 +30,7 @@ export async function getCandlestickData(params) {
     return response?.data;
   } catch (error) {
     console.error('Ошибка при получении данных:', error.message);
+    return null;
   }
 }
 
