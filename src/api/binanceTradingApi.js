@@ -99,6 +99,26 @@ export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin,
   return { quantity, fillPrice, slPrice: actualSL, tpPrice: actualTP };
 };
 
+export const getDailyPnl = async () => {
+  try {
+    const startTime = Date.now() - 24 * 60 * 60 * 1000;
+    const data = await authRequest('GET', '/fapi/v1/income', {
+      incomeType: 'REALIZED_PNL',
+      startTime,
+      limit: 1000,
+    });
+    let earned = 0, lost = 0;
+    for (const item of data) {
+      const val = parseFloat(item.income);
+      if (val > 0) earned += val;
+      else lost += val;
+    }
+    return { earned: earned.toFixed(2), lost: Math.abs(lost).toFixed(2) };
+  } catch {
+    return null;
+  }
+};
+
 export const getOpenPosition = async (symbol) => {
   try {
     const data = await authRequest('GET', '/fapi/v2/positionRisk', {symbol});

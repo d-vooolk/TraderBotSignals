@@ -4,7 +4,11 @@
       "Bash(node index.js)",
       "Bash(sshpass *)",
       "Bash(ssh *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Read(//c/Users/Dmitriy/.ssh/**)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

@@ -5,7 +5,7 @@ import {SETTINGS} from "../../settings.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
 
-export const wsStatus = {running: false, symbolsCount: 0, lastSignalAt: null};
+export const wsStatus = {running: false, symbolsCount: 0, lastSignalAt: null, lastCandleAt: null};
 
 const calculateRSI = (closes, period = 14) => {
   if (closes.length < period + 1) return 50;
@@ -63,6 +63,8 @@ export const startWebSocket = async (bot) => {
     const closePrice = parseFloat(candle.c);
     const volume     = parseFloat(candle.q); // quote volume (USDT)
     const isClosed   = candle.x;             // true = свеча закрыта
+
+    wsStatus.lastCandleAt = new Date().toISOString();
 
     if (!symbolData[symbol]) {
       symbolData[symbol] = { lastChange: 0, closes: [], volumes: [] };
