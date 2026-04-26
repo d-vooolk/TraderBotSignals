@@ -159,30 +159,26 @@ export const placeTradeWithSLTP = async ({
   // п.3: SL/TP в отдельном try/catch — открытая позиция не должна висеть без защиты молча
   let slTpError = null;
   try {
-    // п.10: трейлинг-стоп или фиксированный стоп
+    // п.10: фиксированный SL всегда — защита до срабатывания TP1
+    const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
+    await algoOrder({
+      symbol, side: closeSide, type: 'STOP',
+      price: slLimitPrice, triggerPrice: actualSL,
+      quantity, timeInForce: 'GTC', ...closeExtra,
+    });
+
+    // Трейлинг активируется только после TP1 — до этого момента спит
     if (trailingStop) {
       try {
         await algoOrder({
           symbol, side: closeSide, type: 'TRAILING_STOP_MARKET',
           callbackRate: slPercent,
+          activationPrice: actualTP1,
           quantity, ...closeExtra,
         });
       } catch {
-        // fallback на stop-limit если TRAILING_STOP_MARKET не прошёл
-        const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
-        await algoOrder({
-          symbol, side: closeSide, type: 'STOP',
-          price: slLimitPrice, triggerPrice: actualSL,
-          quantity, timeInForce: 'GTC', ...closeExtra,
-        });
+        // Если трейлинг не прошёл — фиксированный SL уже стоит, этого достаточно
       }
-    } else {
-      const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
-      await algoOrder({
-        symbol, side: closeSide, type: 'STOP',
-        price: slLimitPrice, triggerPrice: actualSL,
-        quantity, timeInForce: 'GTC', ...closeExtra,
-      });
     }
 
     if (qty1 > 0) {
