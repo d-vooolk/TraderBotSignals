@@ -86,7 +86,7 @@ const getPositionMode = async () => {
 
 export const placeTradeWithSLTP = async ({
   symbol, side, entryPrice, usdtMargin, leverage,
-  slPercent = 2, tpPercent = 4, trailingStop = false, limitEntry = false,
+  slPercent = 1, tpPercent = 3, breakEvenAt = 0.5, trailingStop = false, limitEntry = false,
 }) => {
   const closeSide    = side === 'BUY' ? 'SELL' : 'BUY';
   const isLong       = side === 'BUY';
@@ -155,13 +155,9 @@ export const placeTradeWithSLTP = async ({
 
   const fillPrice = parseFloat(order.avgPrice) || entryPrice;
 
-  const actualSL  = fmtPrice(isLong ? fillPrice * (1 - slPercent / 100) : fillPrice * (1 + slPercent / 100));
-  const actualTP1 = fmtPrice(isLong ? fillPrice * (1 + slPercent / 100) : fillPrice * (1 - slPercent / 100));
-  const actualTP2 = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100) : fillPrice * (1 - tpPercent / 100));
-
-  // TP1 — 50%, TP2 — 50%. Если qty1 округляется до 0 — весь объём на TP2
-  const qty1 = fmtQty(quantity * 0.5);
-  const qty2 = qty1 > 0 ? fmtQty(quantity - qty1) : quantity;
+  const actualSL       = fmtPrice(isLong ? fillPrice * (1 - slPercent / 100)  : fillPrice * (1 + slPercent / 100));
+  const actualTP       = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100)  : fillPrice * (1 - tpPercent / 100));
+  const actualBreakEven = fmtPrice(isLong ? fillPrice * (1 + breakEvenAt / 100) : fillPrice * (1 - breakEvenAt / 100));
 
   // Binance с 2025-12-09 требует алго-эндпоинт для условных ордеров
   const placedAlgoIds = [];
@@ -177,14 +173,10 @@ export const placeTradeWithSLTP = async ({
     return result;
   };
 
-  // Цены лимитного исполнения: небольшой offset от триггера чтобы ордер точно прошёл
-  const tp1LimitPrice = fmtPrice(isLong ? actualTP1 * 0.999 : actualTP1 * 1.001);
-  const tp2LimitPrice = fmtPrice(isLong ? actualTP2 * 0.999 : actualTP2 * 1.001);
-
   // SL/TP в отдельном try/catch — открытая позиция не должна висеть без защиты молча
   let slTpError = null;
   try {
-    // Фиксированный SL всегда — до TP1 или до переноса в безубыток
+    // SL: начальный жёсткий стоп до момента переноса в безубыток
     const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
     await algoOrder({
       symbol, side: closeSide, type: 'STOP',
@@ -192,38 +184,32 @@ export const placeTradeWithSLTP = async ({
       quantity, timeInForce: 'GTC', ...closeExtra,
     }, 'sl');
 
-    // Трейлинг активируется только после TP1 — до этого момента спит
     if (trailingStop) {
+      // Трейлинг активируется при достижении breakEvenAt% — с этой точки идём дальше
       try {
         await algoOrder({
           symbol, side: closeSide, type: 'TRAILING_STOP_MARKET',
           callbackRate: slPercent,
-          activationPrice: actualTP1,
+          activationPrice: actualBreakEven,
           quantity, ...closeExtra,
         }, 'trailing');
       } catch {
-        // Если трейлинг не прошёл — фиксированный SL уже стоит, этого достаточно
+        // Если трейлинг не прошёл — SL уже стоит, этого достаточно
       }
-    }
-
-    if (qty1 > 0) {
+    } else {
+      // Фиксированный TP на 100% позиции
+      const tpLimitPrice = fmtPrice(isLong ? actualTP * 0.999 : actualTP * 1.001);
       await algoOrder({
         symbol, side: closeSide, type: 'TAKE_PROFIT',
-        price: tp1LimitPrice, triggerPrice: actualTP1,
-        quantity: qty1, timeInForce: 'GTC', ...closeExtra,
-      }, 'tp1');
+        price: tpLimitPrice, triggerPrice: actualTP,
+        quantity, timeInForce: 'GTC', ...closeExtra,
+      }, 'tp');
     }
-
-    await algoOrder({
-      symbol, side: closeSide, type: 'TAKE_PROFIT',
-      price: tp2LimitPrice, triggerPrice: actualTP2,
-      quantity: qty2, timeInForce: 'GTC', ...closeExtra,
-    }, 'tp2');
   } catch (err) {
     slTpError = err?.response?.data?.msg || err.message || 'Ошибка выставления SL/TP';
   }
 
-  return { quantity, fillPrice, slPrice: actualSL, tp1Price: actualTP1, tpPrice: actualTP2, slTpError, algoIds: placedAlgoIds, namedAlgoIds };
+  return { quantity, fillPrice, slPrice: actualSL, tpPrice: actualTP, breakEvenPrice: actualBreakEven, slTpError, algoIds: placedAlgoIds, namedAlgoIds };
 };
 
 export const getDailyPnl = async () => {
@@ -343,6 +329,19 @@ export const getSymbolCloseSummary = async (symbol, openTime) => {
   }
 
   return { pnl, closeReason };
+};
+
+export const closePositionMarket = async (symbol) => {
+  const [position, hedgeMode] = await Promise.all([getOpenPosition(symbol), getPositionMode()]);
+  if (!position) return false;
+  const posAmt = parseFloat(position.positionAmt);
+  if (posAmt === 0) return false;
+  const isLong = posAmt > 0;
+  const side = isLong ? 'SELL' : 'BUY';
+  const quantity = Math.abs(posAmt);
+  const extra = hedgeMode ? { positionSide: isLong ? 'LONG' : 'SHORT' } : { reduceOnly: 'true' };
+  await authRequest('POST', '/fapi/v1/order', { symbol, side, type: 'MARKET', quantity, ...extra });
+  return true;
 };
 
 export const placeSLAtBreakeven = async (symbol, side, fillPrice, remainingQty, slAlgoId) => {

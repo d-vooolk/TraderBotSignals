@@ -29,10 +29,12 @@ export const DEFAULT_SETTINGS = {
   trade: {
     leverage: 5,
     depositPercent: 10,
-    slPercent: 2,
-    tpPercent: 4,
+    slPercent: 1,
+    tpPercent: 3,
+    breakEvenAt: 0.5,
     trailingStop: false,
     limitEntry: false,
+    timeStopMin: 45,
   },
   autoTrade: {
     leverage: 5,

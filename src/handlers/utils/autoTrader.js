@@ -1,5 +1,5 @@
 import { SETTINGS } from '../../settings.js';
-import { placeTradeWithSLTP, getUsdtBalance, getOpenPosition } from '../../api/binanceTradingApi.js';
+import { placeTradeWithSLTP, getUsdtBalance, getOpenPosition, closePositionMarket } from '../../api/binanceTradingApi.js';
 import { getBinanceFuturesPrice } from '../../api/binanceApi.js';
 import { logTrade } from './tradeHistory.js';
 import { startPositionWatcher } from './positionWatcher.js';
@@ -188,6 +188,7 @@ export const autoTrader = {
         leverage,
         slPercent:    SETTINGS.trade.slPercent,
         tpPercent:    SETTINGS.trade.tpPercent,
+        breakEvenAt:  SETTINGS.trade.breakEvenAt ?? 0.5,
         trailingStop: SETTINGS.trade.trailingStop,
         limitEntry:   SETTINGS.trade.limitEntry,
       });
@@ -204,9 +205,10 @@ export const autoTrader = {
         auto:       true,
       });
 
-      const emoji   = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
+      const emoji = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
+      const beAt  = SETTINGS.trade.breakEvenAt ?? 0.5;
       const slLabel = SETTINGS.trade.trailingStop
-        ? `🔄 Трейлинг ${SETTINGS.trade.slPercent}%`
+        ? `🔄 Трейлинг ${SETTINGS.trade.slPercent}% (с +${beAt}%)`
         : `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)`;
 
       if (chatId && telegram) {
@@ -218,17 +220,33 @@ export const autoTrader = {
           `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${leverage}x)\n` +
           `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
           `${slLabel}\n` +
-          `🎯 TP1: <code>$${result.tp1Price}</code>  (+${SETTINGS.trade.slPercent}%) — 50%\n` +
-          `🎯 TP2: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%) — 50%`,
+          `🔄 Безубыток при: <code>$${result.breakEvenPrice}</code>  (+${beAt}%)\n` +
+          `🎯 TP: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%)`,
           { parse_mode: 'HTML' }
         );
-        if (result.slTpError) {
-          await telegram.sendMessage(
-            chatId,
-            `⚠️ Авто-сделка: SL/TP не выставились:\n<code>${result.slTpError}</code>`,
-            { parse_mode: 'HTML' }
-          );
+      }
+
+      // Позиция открылась без защитных ордеров — немедленно закрываем
+      if (result.slTpError) {
+        try {
+          await closePositionMarket(`${coinSymbol}USDT`);
+          if (chatId && telegram) {
+            await telegram.sendMessage(
+              chatId,
+              `⚠️ <b>${coinSymbol}</b>: SL/TP не выставились — позиция закрыта автоматически.\n<code>${result.slTpError}</code>`,
+              { parse_mode: 'HTML' }
+            ).catch(() => {});
+          }
+        } catch (closeErr) {
+          if (chatId && telegram) {
+            telegram.sendMessage(
+              chatId,
+              `🚨 <b>${coinSymbol}</b>: SL/TP не выставились И не удалось закрыть!\n<code>${result.slTpError}</code>`,
+              { parse_mode: 'HTML' }
+            ).catch(() => {});
+          }
         }
+        return;
       }
 
       startPositionWatcher(
@@ -237,7 +255,7 @@ export const autoTrader = {
         result.algoIds ?? [],
         (pnl, closeReason) => onTradeClosed(pnl, closeReason, coinSymbol, telegram),
         true,
-        { side, fillPrice: result.fillPrice, slAlgoId: result.namedAlgoIds?.sl },
+        { side, fillPrice: result.fillPrice, slAlgoId: result.namedAlgoIds?.sl, breakEvenAt: beAt },
       );
 
     } catch (err) {

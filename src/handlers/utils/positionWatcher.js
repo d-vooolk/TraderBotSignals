@@ -1,4 +1,4 @@
-import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary, placeSLAtBreakeven } from '../../api/binanceTradingApi.js';
+import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary, placeSLAtBreakeven, closePositionMarket } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
 import { markSlHit } from './slCooldown.js';
 
@@ -11,7 +11,6 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
 
   let hasSeenPosition = false;
   let openTime        = null;
-  let openQty         = 0;
   let breakEvenMoved  = false;
   const startTime     = Date.now();
 
@@ -28,15 +27,22 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
         if (!hasSeenPosition) {
           hasSeenPosition = true;
           openTime = Date.now();
-          openQty  = Math.abs(parseFloat(position.positionAmt));
         }
 
-        // Детектируем срабатывание TP1: объём упал примерно на 40%
-        if (!breakEvenMoved && breakEvenData && openQty > 0) {
-          const currentQty = Math.abs(parseFloat(position.positionAmt));
-          if (currentQty > 0 && currentQty < openQty * 0.7) {
+        // Переносим SL в безубыток когда цена прошла breakEvenAt% в нашу сторону
+        if (!breakEvenMoved && breakEvenData && openTime) {
+          const markPrice = parseFloat(position.markPrice);
+          const isLong    = breakEvenData.side === 'BUY';
+          const beAt      = breakEvenData.breakEvenAt ?? 0.5;
+          const threshold = isLong
+            ? breakEvenData.fillPrice * (1 + beAt / 100)
+            : breakEvenData.fillPrice * (1 - beAt / 100);
+          const reached = isLong ? markPrice >= threshold : markPrice <= threshold;
+
+          if (reached) {
             breakEvenMoved = true;
             try {
+              const currentQty = Math.abs(parseFloat(position.positionAmt));
               await placeSLAtBreakeven(
                 symbol,
                 breakEvenData.side,
@@ -46,7 +52,7 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
               );
               telegram.sendMessage(
                 chatId,
-                `🔄 <b>${symbol}</b>: TP1 взят — SL перенесён в безубыток`,
+                `🔄 <b>${symbol}</b>: +${beAt}% — SL перенесён в безубыток`,
                 { parse_mode: 'HTML' }
               ).catch(() => {});
             } catch (err) {
@@ -55,13 +61,25 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
           }
         }
 
+        // Тайм-стоп: если цена не пошла в нужную сторону за N минут — закрываем
+        const timeStopMs = (SETTINGS.trade?.timeStopMin ?? 45) * 60_000;
+        if (!breakEvenMoved && openTime && Date.now() - openTime > timeStopMs) {
+          clearInterval(interval);
+          await cancelAlgoOrdersById(algoIds);
+          await cancelAllSymbolOrders(symbol);
+          try { await closePositionMarket(symbol); } catch {}
+          await new Promise(r => setTimeout(r, 2000));
+          const { pnl } = await getSymbolCloseSummary(symbol, openTime);
+          if (onClose) await onClose(pnl, '⏱ Тайм-стоп');
+          return;
+        }
+
         return;
       }
 
-      if (!hasSeenPosition) return; // Позиция ещё не зарегистрировалась на бирже
+      if (!hasSeenPosition) return;
 
       clearInterval(interval);
-      // Отменяем по сохранённым algoId (точно) + по символу (резервно)
       await cancelAlgoOrdersById(algoIds);
       await cancelAllSymbolOrders(symbol);
 
