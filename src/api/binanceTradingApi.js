@@ -52,7 +52,7 @@ const getSymbolInfo = async (symbol) => {
       }
     }
   }
-  return symbolsCache?.find(s => s.symbol === symbol) ?? null;
+  return symbolsCache?.find(s => s.symbol === symbol.toUpperCase()) ?? null;
 };
 
 const roundToStep = (value, step) => {
