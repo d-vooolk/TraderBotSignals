@@ -1,6 +1,5 @@
 import {buildMainKeyboard, MENU_TITLE} from "../settingsKeyboards.js";
 import {wsStatus} from "../websocket.js";
-import {readHistory} from "../../../handlers/utils/tradeHistory.js";
 import {getDailyPnl} from "../../../api/binanceTradingApi.js";
 
 export const settingsHandler = (context) => {
@@ -13,16 +12,8 @@ const toMsk = (iso) => {
 };
 
 export const statusHandler = async (context) => {
-    const ws      = wsStatus.running ? '✅ Работает' : '❌ Остановлен';
-    const history = readHistory();
-    const last    = history[history.length - 1];
-
+    const ws         = wsStatus.running ? '✅ Работает' : '❌ Остановлен';
     const lastCandle = wsStatus.lastCandleAt ? toMsk(wsStatus.lastCandleAt) : 'нет данных';
-    const lastSignal = wsStatus.lastSignalAt ? toMsk(wsStatus.lastSignalAt) : 'нет сигналов';
-
-    const lastTrade = last
-        ? `\n🕐 Последняя сделка: *${last.coinSymbol}* ${last.direction === 'up' ? '📈' : '📉'} — ${toMsk(last.timestamp)}`
-        : '';
 
     const pnl = await getDailyPnl();
     const pnlStr = pnl
@@ -33,10 +24,7 @@ export const statusHandler = async (context) => {
         `📊 *Статус бота*\n\n` +
         `WebSocket: ${ws}\n` +
         `Монет в мониторинге: *${wsStatus.symbolsCount}*\n` +
-        `📡 Последний анализ: *${lastCandle}*\n` +
-        `🚀 Последний сигнал: *${lastSignal}*\n` +
-        `Сделок в истории: *${history.length}*` +
-        lastTrade +
+        `📡 Последний анализ: *${lastCandle}*` +
         pnlStr,
         {parse_mode: 'Markdown'}
     );
