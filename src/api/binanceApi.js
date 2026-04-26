@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({timeout: 5000});
+const apiLong = axios.create({timeout: 20000});
 
 export async function getBinanceFuturesPrice(symbol) {
   try {
@@ -33,15 +34,18 @@ export async function getFuturesCandlestickData(params) {
   }
 }
 
-export const fetchFuturesSymbols = async () => {
+export const fetchFuturesSymbols = async (retries = 4) => {
   console.info("📡 Запрос списка фьючерсных монет...");
-  try {
-    const response = await api.get("https://fapi.binance.com/fapi/v1/exchangeInfo");
-    const symbols = response?.data?.symbols?.map(s => s?.symbol?.toLowerCase());
-    console.info(`✅ Найдено ${symbols.length} монет.`);
-    return symbols;
-  } catch (error) {
-    console.error("❌ Ошибка при получении списка монет:", error);
-    return [];
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await apiLong.get("https://fapi.binance.com/fapi/v1/exchangeInfo");
+      const symbols = response?.data?.symbols?.map(s => s?.symbol?.toLowerCase());
+      console.info(`✅ Найдено ${symbols.length} монет.`);
+      return symbols;
+    } catch (error) {
+      console.error(`❌ Ошибка при получении списка монет (попытка ${attempt}/${retries}): ${error.message}`);
+      if (attempt < retries) await new Promise(r => setTimeout(r, 5000 * attempt));
+    }
   }
+  return [];
 };
