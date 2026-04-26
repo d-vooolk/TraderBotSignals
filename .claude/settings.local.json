@@ -16,7 +16,13 @@
       "Bash(python3 *)",
       "WebSearch",
       "WebFetch(domain:developers.binance.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "PowerShell(ConvertTo-SecureString *)",
+      "PowerShell($env:PLINK_PROTOCOL = \"ssh\"; & \"C:\\\\Windows\\\\System32\\\\OpenSSH\\\\ssh.exe\" -o StrictHostKeyChecking=no -o PasswordAuthentication=yes root@217.12.37.199 \"pm2 logs tradeBot --lines 80 --nostream\" 2>&1)",
+      "Bash(node *)",
+      "Bash(xargs grep *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }
