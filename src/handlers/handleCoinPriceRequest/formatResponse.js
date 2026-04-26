@@ -8,15 +8,7 @@ const formatPrice = (n) => {
   return n.toFixed(7);
 };
 
-export const formatCoinResponse = ({coinSymbol, spotData, futuresData, changePriceSignal = null, tradeParams = null}) => {
-
-  const {
-    price: spotPrice = null,
-    high: spotHigh = null,
-    low: spotLow = null,
-    volume: spotVolume = null,
-    change: spotChange = null,
-  } = cleanData(spotData) || {};
+export const formatCoinResponse = ({coinSymbol, futuresData, changePriceSignal = null, tradeParams = null}) => {
 
   const {
     price: futuresPrice = null,
@@ -30,24 +22,18 @@ export const formatCoinResponse = ({coinSymbol, spotData, futuresData, changePri
     ? `🔥  За последние *${SETTINGS.handler.temporaryCandle}* \`\\(${changePriceSignal}\`%\\)` + '\n'
     : '';
 
-  const changePars = (spotChange || futuresChange);
-  const title = `${changePars === 0 ? '⚪️' : (changePars > 0 ? '🟢' : '🔴')} \`${coinSymbol}\` \`\\(${changePars}\`%\\)` + '\n';
-
-  const spot = spotPrice
-    ? `🏦 *SP:*  $\`${spotPrice}\`` + '\n'
-    : '';
+  const title = `${futuresChange === 0 ? '⚪️' : (futuresChange > 0 ? '🟢' : '🔴')} \`${coinSymbol}\` \`\\(${futuresChange}\`%\\)` + '\n';
 
   const futures = futuresPrice
     ? `🎢 *FT:*  $\`${futuresPrice}\`` + '\n'
     : '';
 
-  const minMax = (spotHigh || futuresHigh) && (spotLow || futuresLow)
-    ? `⛅️️  $\`${spotHigh || futuresHigh}\`   🌧  $\`${spotLow || futuresLow}\`` + '\n'
+  const minMax = futuresHigh && futuresLow
+    ? `⛅️️  $\`${futuresHigh}\`   🌧  $\`${futuresLow}\`` + '\n'
     : '';
 
-  const volumePars = formatLargeNumber(spotVolume || futuresVolume);
-  const volumeFinal = volumePars
-    ? `💰  $\`${volumePars}\`` + '\n'
+  const volumeFinal = formatLargeNumber(futuresVolume)
+    ? `💰  $\`${formatLargeNumber(futuresVolume)}\`` + '\n'
     : '';
 
   const slTp = (() => {
@@ -61,5 +47,5 @@ export const formatCoinResponse = ({coinSymbol, spotData, futuresData, changePri
       `🎯 *TP2:* $\`${formatPrice(tpPrice)}\`` + '\n';
   })();
 
-  return `${changePriceFinal}\n${title}\n${spot}${futures}\n${minMax}${volumeFinal}${slTp}`;
+  return `${changePriceFinal}\n${title}\n${futures}\n${minMax}${volumeFinal}${slTp}`;
 };

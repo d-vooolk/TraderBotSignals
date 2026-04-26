@@ -21,15 +21,14 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
       await context.deleteMessage(context.message.message_id);
     }
 
-    const [spotData, futuresData] = await getPrice(coinSymbol);
+    const futuresData = await getPrice(coinSymbol);
 
-    if (!spotData && !futuresData) {
+    if (!futuresData) {
       return await getUndefinedCoinNotification(context, coinSymbol);
     }
 
     const [chartUrl, message, buttons] = await getSendData(
       coinSymbol,
-      spotData,
       futuresData,
       changePriceSignal,
       SETTINGS.candlestick.interval,

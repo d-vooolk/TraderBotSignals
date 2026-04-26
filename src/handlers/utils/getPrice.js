@@ -1,6 +1,3 @@
-import {getBinanceFuturesPrice, getBinanceSpotPrice} from "../../api/binanceApi.js";
+import {getBinanceFuturesPrice} from "../../api/binanceApi.js";
 
-export const getPrice = (coinSymbol) => Promise.all([
-    getBinanceSpotPrice(coinSymbol),
-    getBinanceFuturesPrice(coinSymbol),
-]);
+export const getPrice = (coinSymbol) => getBinanceFuturesPrice(coinSymbol);

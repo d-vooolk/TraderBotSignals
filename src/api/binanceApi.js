@@ -2,40 +2,6 @@ import axios from 'axios';
 
 const api = axios.create({timeout: 5000});
 
-export async function getBinanceSpotPrice(symbol) {
-  try {
-    const response = await api.get(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}USDT`);
-
-    const data = response?.data;
-    if (data) {
-      return {
-        price: data?.['lastPrice'],
-        volume: data?.['quoteVolume'],
-        high: data?.['highPrice'],
-        low: data?.['lowPrice'],
-        change: data?.['priceChangePercent'],
-      };
-    } else {
-      return null;
-    }
-  } catch (error) {
-    console.error(`Binance SPOT не поддерживает ${symbol}`);
-    return null;
-  }
-}
-
-
-export async function getCandlestickData(params) {
-  try {
-    const response = await api.get(`https://api.binance.com/api/v3/klines`, {params});
-
-    return response?.data;
-  } catch (error) {
-    console.error('Ошибка при получении данных:', error.message);
-    return null;
-  }
-}
-
 export async function getBinanceFuturesPrice(symbol) {
   try {
     const response = await api.get(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}USDT`);

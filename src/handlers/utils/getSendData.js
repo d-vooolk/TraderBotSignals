@@ -1,5 +1,5 @@
 import {formatCoinResponse} from "../handleCoinPriceRequest/formatResponse.js";
-import {getCandlestickData, getFuturesCandlestickData} from "../../api/binanceApi.js";
+import {getFuturesCandlestickData} from "../../api/binanceApi.js";
 import {candlestickParams} from "../constants/candlestick.js";
 import {SETTINGS} from "../../settings.js";
 import {generateChartURL} from "../handleCoinPriceRequest/generateCandlestickChart.js";
@@ -8,7 +8,6 @@ import {Markup} from "telegraf";
 
 export const getSendData = async (
   coinSymbol,
-  spotData,
   futuresData,
   changePriceSignal,
   interval = "15m",
@@ -16,15 +15,12 @@ export const getSendData = async (
   direction = null,
 ) => {
   const params = candlestickParams(coinSymbol, interval, limit);
-  const resCandlestick =
-    await getFuturesCandlestickData(params) ??
-    await getCandlestickData(params);
+  const resCandlestick = await getFuturesCandlestickData(params);
   const chartUrl = await generateChartURL(resCandlestick);
 
-  // Рассчитываем параметры сделки один раз — используются и в сообщении и в кнопке
   let tradeParams = null;
   if (direction) {
-    const rawPrice = parseFloat(spotData?.price) || parseFloat(futuresData?.price);
+    const rawPrice = parseFloat(futuresData?.price);
     if (rawPrice && !isNaN(rawPrice)) {
       const isLong = direction === 'up';
       const {slPercent, tpPercent} = SETTINGS.trade;
@@ -38,7 +34,7 @@ export const getSendData = async (
     }
   }
 
-  const message = formatCoinResponse({coinSymbol, spotData, futuresData, changePriceSignal, tradeParams});
+  const message = formatCoinResponse({coinSymbol, futuresData, changePriceSignal, tradeParams});
   const buttons = Markup.inlineKeyboard(generateButtons(coinSymbol, tradeParams));
 
   return [chartUrl, message, buttons, resCandlestick];
