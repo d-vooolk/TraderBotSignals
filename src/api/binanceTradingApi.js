@@ -81,13 +81,13 @@ export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin,
   // 5. Стоп-лосс
   await authRequest('POST', '/fapi/v1/order', {
     symbol, side: closeSide, type: 'STOP_MARKET',
-    stopPrice: actualSL, closePosition: 'true',
+    stopPrice: actualSL, quantity, reduceOnly: 'true',
   });
 
   // 6. Тейк-профит
   await authRequest('POST', '/fapi/v1/order', {
     symbol, side: closeSide, type: 'TAKE_PROFIT_MARKET',
-    stopPrice: actualTP, closePosition: 'true',
+    stopPrice: actualTP, quantity, reduceOnly: 'true',
   });
 
   return { quantity, fillPrice, slPrice: actualSL, tpPrice: actualTP };
