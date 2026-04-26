@@ -32,11 +32,23 @@ const authRequest = async (method, path, params = {}) => {
 const getSymbolInfo = async (symbol) => {
   const now = Date.now();
   if (!symbolsCache || now - symbolsCacheTime > 3_600_000) {
-    const res = await apiLong.get(`${BASE}/fapi/v1/exchangeInfo`); // п.4: apiLong для большого ответа
-    symbolsCache = res.data.symbols;
-    symbolsCacheTime = now;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await apiLong.get(`${BASE}/fapi/v1/exchangeInfo`);
+        symbolsCache = res.data.symbols;
+        symbolsCacheTime = now;
+        break;
+      } catch (err) {
+        if (attempt === 3) {
+          // fallback на устаревший кэш если сеть нестабильна
+          if (symbolsCache) break;
+          throw err;
+        }
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
+    }
   }
-  return symbolsCache.find(s => s.symbol === symbol) ?? null;
+  return symbolsCache?.find(s => s.symbol === symbol) ?? null;
 };
 
 const roundToStep = (value, step) => {
@@ -50,11 +62,29 @@ export const getUsdtBalance = async () => {
   return parseFloat(asset?.availableBalance ?? 0);
 };
 
+const getPositionMode = async () => {
+  try {
+    const data = await authRequest('GET', '/fapi/v1/positionSide/dual');
+    return data.dualSidePosition === true;
+  } catch {
+    return false;
+  }
+};
+
 export const placeTradeWithSLTP = async ({
   symbol, side, entryPrice, usdtMargin, leverage,
   slPercent = 2, tpPercent = 4, trailingStop = false, limitEntry = false,
 }) => {
-  const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
+  const closeSide  = side === 'BUY' ? 'SELL' : 'BUY';
+  const isLong     = side === 'BUY';
+  const hedgeMode  = await getPositionMode();
+  const posSide    = isLong ? 'LONG' : 'SHORT';
+  const closePosSide = isLong ? 'SHORT' : 'LONG';
+
+  // В hedge mode reduceOnly запрещён — используем positionSide
+  const closeExtra = hedgeMode
+    ? { positionSide: closePosSide }
+    : { reduceOnly: 'true' };
 
   await authRequest('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' }).catch(() => {});
   await authRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
@@ -72,30 +102,30 @@ export const placeTradeWithSLTP = async ({
 
   // п.13: лимитный вход — пробуем LIMIT FOK, иначе MARKET
   let order;
+  const openExtra = hedgeMode ? { positionSide: posSide } : {};
   if (limitEntry) {
-    const isLong = side === 'BUY';
     const limitPrice = fmtPrice(isLong ? entryPrice * 0.999 : entryPrice * 1.001);
     let filled = false;
     try {
       order = await authRequest('POST', '/fapi/v1/order', {
         symbol, side, type: 'LIMIT',
         price: limitPrice, quantity, timeInForce: 'FOK',
+        ...openExtra,
       });
       filled = order.status === 'FILLED';
     } catch { /* лимит не прошёл — упадём на маркет */ }
     if (!filled) {
       order = await authRequest('POST', '/fapi/v1/order', {
-        symbol, side, type: 'MARKET', quantity,
+        symbol, side, type: 'MARKET', quantity, ...openExtra,
       });
     }
   } else {
     order = await authRequest('POST', '/fapi/v1/order', {
-      symbol, side, type: 'MARKET', quantity,
+      symbol, side, type: 'MARKET', quantity, ...openExtra,
     });
   }
 
   const fillPrice = parseFloat(order.avgPrice) || entryPrice;
-  const isLong    = side === 'BUY';
 
   const actualSL  = fmtPrice(isLong ? fillPrice * (1 - slPercent / 100) : fillPrice * (1 + slPercent / 100));
   const actualTP1 = fmtPrice(isLong ? fillPrice * (1 + slPercent / 100) : fillPrice * (1 - slPercent / 100));
@@ -114,7 +144,7 @@ export const placeTradeWithSLTP = async ({
         await authRequest('POST', '/fapi/v1/order', {
           symbol, side: closeSide, type: 'TRAILING_STOP_MARKET',
           callbackRate: slPercent,
-          quantity, reduceOnly: 'true',
+          quantity, ...closeExtra,
         });
       } catch {
         // fallback на stop-limit если TRAILING_STOP_MARKET не прошёл
@@ -122,7 +152,7 @@ export const placeTradeWithSLTP = async ({
         await authRequest('POST', '/fapi/v1/order', {
           symbol, side: closeSide, type: 'STOP',
           price: slLimitPrice, stopPrice: actualSL,
-          quantity, reduceOnly: 'true', timeInForce: 'GTC',
+          quantity, timeInForce: 'GTC', ...closeExtra,
         });
       }
     } else {
@@ -130,20 +160,20 @@ export const placeTradeWithSLTP = async ({
       await authRequest('POST', '/fapi/v1/order', {
         symbol, side: closeSide, type: 'STOP',
         price: slLimitPrice, stopPrice: actualSL,
-        quantity, reduceOnly: 'true', timeInForce: 'GTC',
+        quantity, timeInForce: 'GTC', ...closeExtra,
       });
     }
 
     await authRequest('POST', '/fapi/v1/order', {
       symbol, side: closeSide, type: 'TAKE_PROFIT',
       price: actualTP1, stopPrice: actualTP1,
-      quantity: qty1, reduceOnly: 'true', timeInForce: 'GTC',
+      quantity: qty1, timeInForce: 'GTC', ...closeExtra,
     });
 
     await authRequest('POST', '/fapi/v1/order', {
       symbol, side: closeSide, type: 'TAKE_PROFIT',
       price: actualTP2, stopPrice: actualTP2,
-      quantity: qty2, reduceOnly: 'true', timeInForce: 'GTC',
+      quantity: qty2, timeInForce: 'GTC', ...closeExtra,
     });
   } catch (err) {
     slTpError = err?.response?.data?.msg || err.message || 'Ошибка выставления SL/TP';

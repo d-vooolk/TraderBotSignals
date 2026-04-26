@@ -12,7 +12,8 @@
       "Bash(node --input-type=module --check)",
       "Bash(node -e ' *)",
       "Bash(npm show *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(python3 *)"
     ]
   }
 }
