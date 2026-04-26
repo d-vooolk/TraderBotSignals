@@ -1,7 +1,7 @@
 import {startCommand} from "./modules/start.js";
 import {helpCommand} from "./modules/help.js";
 import {COMMANDS} from "./constants.js";
-import {longHandler, settingsHandler, shortHandler, statusHandler} from "./handlers.js";
+import {settingsHandler, statusHandler} from "./handlers.js";
 
 export const setupCommands = (bot) => {
   bot.start(startCommand);
@@ -9,6 +9,4 @@ export const setupCommands = (bot) => {
 
   bot.command(COMMANDS.settings, settingsHandler);
   bot.command(COMMANDS.status,   statusHandler);
-  bot.command(COMMANDS.short, shortHandler);
-  bot.command(COMMANDS.long, longHandler);
 };

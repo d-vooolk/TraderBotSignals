@@ -1,4 +1,3 @@
-import {longPhrases, shortPhrases} from "./constants.js";
 import {buildMainKeyboard, MENU_TITLE} from "../settingsKeyboards.js";
 import {wsStatus} from "../websocket.js";
 import {readHistory} from "../../../handlers/utils/tradeHistory.js";
@@ -25,12 +24,3 @@ export const statusHandler = (context) => {
     );
 };
 
-export const shortHandler = (context) => {
-    const i = Math.floor(Math.random() * shortPhrases.length);
-    context.reply(shortPhrases[i]);
-};
-
-export const longHandler = (context) => {
-    const i = Math.floor(Math.random() * longPhrases.length);
-    context.reply(longPhrases[i]);
-};
