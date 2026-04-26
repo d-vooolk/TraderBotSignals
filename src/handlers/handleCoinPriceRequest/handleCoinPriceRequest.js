@@ -2,6 +2,8 @@ import {getPrice} from "../utils/getPrice.js";
 import {getError} from "../utils/getError.js";
 import {getUndefinedCoinNotification} from "../utils/getUndefinedCoinNotification.js";
 import {getSendData} from "../utils/getSendData.js";
+import {getFuturesCandlestickData} from "../../api/binanceApi.js";
+import {candlestickParams} from "../constants/candlestick.js";
 import {SETTINGS} from "../../settings.js";
 
 export const handleCoinPriceRequest = async (context, chat_id, symbol, changePriceSignal, direction = null) => {
@@ -21,7 +23,11 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
       await context.deleteMessage(context.message.message_id);
     }
 
-    const futuresData = await getPrice(coinSymbol);
+    const params = candlestickParams(coinSymbol, SETTINGS.candlestick.interval, SETTINGS.candlestick.limit);
+    const [futuresData, candles] = await Promise.all([
+      getPrice(coinSymbol),
+      getFuturesCandlestickData(params),
+    ]);
 
     if (!futuresData) {
       return await getUndefinedCoinNotification(context, coinSymbol);
@@ -30,9 +36,8 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
     const [chartUrl, message, buttons] = await getSendData(
       coinSymbol,
       futuresData,
+      candles,
       changePriceSignal,
-      SETTINGS.candlestick.interval,
-      SETTINGS.candlestick.limit,
       direction,
     );
 

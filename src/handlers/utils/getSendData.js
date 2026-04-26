@@ -1,6 +1,4 @@
 import {formatCoinResponse} from "../handleCoinPriceRequest/formatResponse.js";
-import {getFuturesCandlestickData} from "../../api/binanceApi.js";
-import {candlestickParams} from "../constants/candlestick.js";
 import {SETTINGS} from "../../settings.js";
 import {generateChartURL} from "../handleCoinPriceRequest/generateCandlestickChart.js";
 import {generateButtons} from "./generateButtons.js";
@@ -9,14 +7,11 @@ import {Markup} from "telegraf";
 export const getSendData = async (
   coinSymbol,
   futuresData,
+  candles,
   changePriceSignal,
-  interval = "15m",
-  limit = 60,
   direction = null,
 ) => {
-  const params = candlestickParams(coinSymbol, interval, limit);
-  const resCandlestick = await getFuturesCandlestickData(params);
-  const chartUrl = await generateChartURL(resCandlestick);
+  const chartUrl = await generateChartURL(candles);
 
   let tradeParams = null;
   if (direction) {
@@ -37,5 +32,5 @@ export const getSendData = async (
   const message = formatCoinResponse({coinSymbol, futuresData, changePriceSignal, tradeParams});
   const buttons = Markup.inlineKeyboard(generateButtons(coinSymbol, tradeParams));
 
-  return [chartUrl, message, buttons, resCandlestick];
+  return [chartUrl, message, buttons, candles];
 };
