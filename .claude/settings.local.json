@@ -13,7 +13,10 @@
       "Bash(node -e ' *)",
       "Bash(npm show *)",
       "Bash(npm install *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "WebSearch",
+      "WebFetch(domain:developers.binance.com)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

@@ -7,9 +7,20 @@ import {candlestickParams} from "../constants/candlestick.js";
 
 export const handleUpdateCallback = async (context) => {
   const callbackData = context.update.callback_query.data;
-  const [action, coinSymbol, interval, limit] = callbackData.split('_');
+  const parts = callbackData.split('_');
 
-  if (action === 'update') {
+  // Формат: update_COIN_direction_interval_limit (новый, 5 частей)
+  // или:    update_COIN_interval_limit            (старый, 4 части)
+  let coinSymbol, direction, interval, limit;
+  if (parts.length >= 5) {
+    [, coinSymbol, direction, interval, limit] = parts;
+    if (direction === 'none') direction = null;
+  } else {
+    [, coinSymbol, interval, limit] = parts;
+    direction = null;
+  }
+
+  if (parts[0] === 'update') {
     try {
       const params = candlestickParams(coinSymbol, interval, parseInt(limit));
       const [futuresData, candles] = await Promise.all([
@@ -21,7 +32,9 @@ export const handleUpdateCallback = async (context) => {
         return await getUndefinedCoinNotification(context, coinSymbol);
       }
 
-      const [chartUrl, message, buttons] = await getSendData(coinSymbol, futuresData, candles, null, null);
+      // direction передаётся из оригинального сигнала — getSendData пересчитает
+      // точку входа по текущей цене и создаст свежую запись в tradeStore
+      const [chartUrl, message, buttons] = await getSendData(coinSymbol, futuresData, candles, null, direction);
 
       if (chartUrl) {
         try {

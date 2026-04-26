@@ -75,10 +75,18 @@ export const placeTradeWithSLTP = async ({
   symbol, side, entryPrice, usdtMargin, leverage,
   slPercent = 2, tpPercent = 4, trailingStop = false, limitEntry = false,
 }) => {
-  const closeSide  = side === 'BUY' ? 'SELL' : 'BUY';
-  const isLong     = side === 'BUY';
-  const hedgeMode  = await getPositionMode();
-  const posSide    = isLong ? 'LONG' : 'SHORT';
+  const closeSide    = side === 'BUY' ? 'SELL' : 'BUY';
+  const isLong       = side === 'BUY';
+
+  // Параллельно: режим позиции + параметры символа + маржа/плечо
+  const [hedgeMode, info] = await Promise.all([
+    getPositionMode(),
+    getSymbolInfo(symbol),
+    authRequest('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' }).catch(() => {}),
+    authRequest('POST', '/fapi/v1/leverage', { symbol, leverage }),
+  ]);
+
+  const posSide      = isLong ? 'LONG' : 'SHORT';
   const closePosSide = isLong ? 'SHORT' : 'LONG';
 
   // В hedge mode reduceOnly запрещён — используем positionSide
@@ -86,10 +94,6 @@ export const placeTradeWithSLTP = async ({
     ? { positionSide: closePosSide }
     : { reduceOnly: 'true' };
 
-  await authRequest('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' }).catch(() => {});
-  await authRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
-
-  const info = await getSymbolInfo(symbol);
   const lotFilter   = info?.filters?.find(f => f.filterType === 'LOT_SIZE');
   const priceFilter = info?.filters?.find(f => f.filterType === 'PRICE_FILTER');
   const stepSize = parseFloat(lotFilter?.stepSize  ?? '0.001');
@@ -132,8 +136,18 @@ export const placeTradeWithSLTP = async ({
   const actualTP2 = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100) : fillPrice * (1 - tpPercent / 100));
 
   // п.9: два тейка — 50% на TP1, 50% на TP2
+  // Если qty1 округляется до 0 (маленькая позиция) — весь объём на TP2
   const qty1 = fmtQty(quantity / 2);
-  const qty2 = fmtQty(quantity - qty1);
+  const qty2 = qty1 > 0 ? fmtQty(quantity - qty1) : quantity;
+
+  // Binance с 2025-12-09 требует алго-эндпоинт для условных ордеров
+  const algoOrder = (params) => authRequest('POST', '/fapi/v1/algoOrder', {
+    algoType: 'CONDITIONAL', ...params,
+  });
+
+  // Цены лимитного исполнения: небольшой offset от триггера чтобы ордер точно прошёл
+  const tp1LimitPrice = fmtPrice(isLong ? actualTP1 * 0.999 : actualTP1 * 1.001);
+  const tp2LimitPrice = fmtPrice(isLong ? actualTP2 * 0.999 : actualTP2 * 1.001);
 
   // п.3: SL/TP в отдельном try/catch — открытая позиция не должна висеть без защиты молча
   let slTpError = null;
@@ -141,7 +155,7 @@ export const placeTradeWithSLTP = async ({
     // п.10: трейлинг-стоп или фиксированный стоп
     if (trailingStop) {
       try {
-        await authRequest('POST', '/fapi/v1/order', {
+        await algoOrder({
           symbol, side: closeSide, type: 'TRAILING_STOP_MARKET',
           callbackRate: slPercent,
           quantity, ...closeExtra,
@@ -149,30 +163,32 @@ export const placeTradeWithSLTP = async ({
       } catch {
         // fallback на stop-limit если TRAILING_STOP_MARKET не прошёл
         const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
-        await authRequest('POST', '/fapi/v1/order', {
+        await algoOrder({
           symbol, side: closeSide, type: 'STOP',
-          price: slLimitPrice, stopPrice: actualSL,
+          price: slLimitPrice, triggerPrice: actualSL,
           quantity, timeInForce: 'GTC', ...closeExtra,
         });
       }
     } else {
       const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
-      await authRequest('POST', '/fapi/v1/order', {
+      await algoOrder({
         symbol, side: closeSide, type: 'STOP',
-        price: slLimitPrice, stopPrice: actualSL,
+        price: slLimitPrice, triggerPrice: actualSL,
         quantity, timeInForce: 'GTC', ...closeExtra,
       });
     }
 
-    await authRequest('POST', '/fapi/v1/order', {
-      symbol, side: closeSide, type: 'TAKE_PROFIT',
-      price: actualTP1, stopPrice: actualTP1,
-      quantity: qty1, timeInForce: 'GTC', ...closeExtra,
-    });
+    if (qty1 > 0) {
+      await algoOrder({
+        symbol, side: closeSide, type: 'TAKE_PROFIT',
+        price: tp1LimitPrice, triggerPrice: actualTP1,
+        quantity: qty1, timeInForce: 'GTC', ...closeExtra,
+      });
+    }
 
-    await authRequest('POST', '/fapi/v1/order', {
+    await algoOrder({
       symbol, side: closeSide, type: 'TAKE_PROFIT',
-      price: actualTP2, stopPrice: actualTP2,
+      price: tp2LimitPrice, triggerPrice: actualTP2,
       quantity: qty2, timeInForce: 'GTC', ...closeExtra,
     });
   } catch (err) {

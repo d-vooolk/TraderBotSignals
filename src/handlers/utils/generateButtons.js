@@ -6,8 +6,9 @@ import {SETTINGS} from "../../settings.js";
 const hasApiKeys = () => !!(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET);
 
 export const generateButtons = (coinSymbol, tradeParams = null) => {
+  const dir = tradeParams?.direction ?? 'none';
   const topLine = timeframes.map(({label, interval, limit}) =>
-    Markup.button.callback(label, `update_${coinSymbol}_${interval}_${limit}`)
+    Markup.button.callback(label, `update_${coinSymbol}_${dir}_${interval}_${limit}`)
   );
 
   const bottomLine = [
