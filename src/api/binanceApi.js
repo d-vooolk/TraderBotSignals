@@ -34,6 +34,20 @@ export async function getFuturesCandlestickData(params) {
   }
 }
 
+export const getFundingRate = async (symbol) => {
+  try {
+    const res = await api.get(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`);
+    return parseFloat(res.data.lastFundingRate ?? 0);
+  } catch { return 0; }
+};
+
+export const getOpenInterest = async (symbol) => {
+  try {
+    const res = await api.get(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`);
+    return parseFloat(res.data.openInterest ?? 0);
+  } catch { return null; }
+};
+
 export const fetchFuturesSymbols = async (retries = 4) => {
   console.info("📡 Запрос списка фьючерсных монет...");
   for (let attempt = 1; attempt <= retries; attempt++) {

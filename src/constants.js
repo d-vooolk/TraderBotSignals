@@ -25,6 +25,8 @@ export const DEFAULT_SETTINGS = {
     minVolumeUsdt: 200000,
     rsiOverbought: 70,
     rsiOversold: 30,
+    fundingThreshold: 0.0005,
+    oiDropThreshold: 0.05,
   },
   trade: {
     leverage: 5,

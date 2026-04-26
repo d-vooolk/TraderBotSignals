@@ -1,6 +1,7 @@
 import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary, placeSLAtBreakeven, closePositionMarket } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
 import { markSlHit } from './slCooldown.js';
+import { watchForBBReentry } from './bbReentry.js';
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WATCH_MS = 48 * 60 * 60 * 1000;
@@ -87,8 +88,13 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
 
       const hasSL = closeReason?.includes('SL');
       if (hasSL) {
-        const cooldownMs = (SETTINGS.handler.slCooldownMin ?? 45) * 60_000;
+        const cooldownMs = (SETTINGS.handler.slCooldownMin ?? 15) * 60_000;
         markSlHit(symbol, cooldownMs);
+        // Ставим на наблюдение BB — перезайдём когда цена вернётся к полосе
+        if (breakEvenData?.side) {
+          const dir = breakEvenData.side === 'BUY' ? 'up' : 'down';
+          watchForBBReentry(symbol, dir);
+        }
       }
 
       if (onClose) {
