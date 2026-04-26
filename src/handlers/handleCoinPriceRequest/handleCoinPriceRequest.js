@@ -37,11 +37,18 @@ export const handleCoinPriceRequest = async (context, chat_id, symbol, changePri
       direction,
     );
 
-    context.telegram.sendPhoto(chat_id, chartUrl, {
-      caption: message,
-      parse_mode: "MarkdownV2",
-      ...buttons,
-    });
+    if (chartUrl) {
+      context.telegram.sendPhoto(chat_id, chartUrl, {
+        caption: message,
+        parse_mode: "MarkdownV2",
+        ...buttons,
+      });
+    } else {
+      context.telegram.sendMessage(chat_id, message, {
+        parse_mode: "MarkdownV2",
+        ...buttons,
+      });
+    }
 
   } catch (error) {
     await getError(context, chat_id, coinSymbol, error);
