@@ -52,7 +52,8 @@ export const getUsdtBalance = async () => {
 export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin, leverage, slPercent = 2, tpPercent = 4 }) => {
   const closeSide = side === 'BUY' ? 'SELL' : 'BUY';
 
-  // 1. Выставляем плечо
+  // 1. Изолированная маржа + плечо
+  await authRequest('POST', '/fapi/v1/marginType', { symbol, marginType: 'ISOLATED' }).catch(() => {});
   await authRequest('POST', '/fapi/v1/leverage', { symbol, leverage });
 
   // 2. Получаем точность по символу
@@ -78,16 +79,21 @@ export const placeTradeWithSLTP = async ({ symbol, side, entryPrice, usdtMargin,
   const actualSL  = fmtPrice(isLong ? fillPrice * (1 - slPercent / 100) : fillPrice * (1 + slPercent / 100));
   const actualTP  = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100) : fillPrice * (1 - tpPercent / 100));
 
-  // 5. Стоп-лосс
+  // Лимитная цена SL чуть хуже триггера — гарантирует исполнение при гэпе
+  const slLimitPrice = fmtPrice(isLong ? actualSL * 0.998 : actualSL * 1.002);
+
+  // 5. Стоп-лосс (stop-limit)
   await authRequest('POST', '/fapi/v1/order', {
-    symbol, side: closeSide, type: 'STOP_MARKET',
-    stopPrice: actualSL, quantity, reduceOnly: 'true',
+    symbol, side: closeSide, type: 'STOP',
+    price: slLimitPrice, stopPrice: actualSL,
+    quantity, reduceOnly: 'true', timeInForce: 'GTC',
   });
 
-  // 6. Тейк-профит
+  // 6. Тейк-профит (take-profit-limit)
   await authRequest('POST', '/fapi/v1/order', {
-    symbol, side: closeSide, type: 'TAKE_PROFIT_MARKET',
-    stopPrice: actualTP, quantity, reduceOnly: 'true',
+    symbol, side: closeSide, type: 'TAKE_PROFIT',
+    price: actualTP, stopPrice: actualTP,
+    quantity, reduceOnly: 'true', timeInForce: 'GTC',
   });
 
   return { quantity, fillPrice, slPrice: actualSL, tpPrice: actualTP };
