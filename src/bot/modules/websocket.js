@@ -23,6 +23,14 @@ const signalCooldown = {};         // symbol -> timestamp
 
 // ─── Индикаторы ──────────────────────────────────────────────────────────────
 
+const calcBB = (closes, period = 20, mult = 2) => {
+  if (closes.length < period) return null;
+  const slice = closes.slice(-period);
+  const sma   = slice.reduce((a, b) => a + b, 0) / period;
+  const std   = Math.sqrt(slice.reduce((s, p) => s + (p - sma) ** 2, 0) / period);
+  return { upper: sma + mult * std, lower: sma - mult * std };
+};
+
 const calculateRSI = (closes, period = 14) => {
   if (closes.length < period + 1) return 50;
   const recent = closes.slice(-(period + 1));
@@ -196,8 +204,9 @@ export const startWebSocket = async (bot) => {
       data.lows.push(lowPrice);      if (data.lows.length    > 25) data.lows.shift();
       data.volumes.push(volume);     if (data.volumes.length > 25) data.volumes.shift();
 
-      // BB перезаход: отдельный сигнал, не зависит от основных фильтров
       const coinSymbol = symbol.slice(0, -4);
+
+      // BB перезаход после SL: отдельный сигнал, не зависит от основных фильтров
       const reentryDir = checkBBReentry(symbol, data.closes);
       if (reentryDir) {
         const now = Date.now();
@@ -206,6 +215,52 @@ export const startWebSocket = async (bot) => {
           signalCooldown[symbol] = now;
           console.info(`🔄 [BB RE-ENTRY] ${symbol.toUpperCase()} ${reentryDir === 'up' ? '↑' : '↓'}`);
           fireSignal(coinSymbol, reentryDir, 0, closePrice);
+        }
+      }
+
+      // BB разворот: цена вышла за полосу и вернулась — mean reversion сигнал
+      if (data.closes.length >= 22 && data.volumes.length >= 5) {
+        const bbPrev = calcBB(data.closes.slice(0, -1)); // BB по свечам до текущей
+        if (bbPrev) {
+          const prevClose = data.closes[data.closes.length - 2];
+          const wasAbove  = prevClose > bbPrev.upper;
+          const wasBelow  = prevClose < bbPrev.lower;
+          const nowInside = closePrice > bbPrev.lower && closePrice < bbPrev.upper;
+
+          if ((wasAbove || wasBelow) && nowInside) {
+            const bbDir = wasBelow ? 'up' : 'down';
+
+            // Минимальный фильтр объёма — те же правила что у основного сигнала
+            const volAvg = data.volumes.slice(0, -1).reduce((a, b) => a + b, 0) / (data.volumes.length - 1);
+            const minVol = SETTINGS.handler.minVolumeUsdt ?? 200_000;
+            const volOk  = volAvg >= minVol;
+
+            const now        = Date.now();
+            const cooldownMs = (SETTINGS.handler.signalCooldownMin ?? 10) * 60_000;
+            const notCooling = now - (signalCooldown[symbol] || 0) >= cooldownMs;
+
+            if (volOk && notCooling) {
+              signalCooldown[symbol] = now;
+              wsStatus.lastSignalAt  = new Date().toISOString();
+              const arrow = bbDir === 'up' ? '↑' : '↓';
+              console.info(`🟣 [BB] ${symbol.toUpperCase()} ${arrow}`);
+
+              if (bot && SETTINGS.savedChatId) {
+                if (autoTrader.isEnabled()) {
+                  autoTrader.execute(coinSymbol, bbDir, bot.telegram, closePrice);
+                } else {
+                  const band = bbDir === 'up' ? 'нижнюю' : 'верхнюю';
+                  bot.telegram.sendMessage(
+                    SETTINGS.savedChatId,
+                    `🟣 <b>BB-РАЗВОРОТ ${arrow}</b>  <code>${coinSymbol.toUpperCase()}USDT</code>\n` +
+                    `Цена пробила ${band} полосу и возвращается назад\n` +
+                    `💵 <code>$${closePrice}</code>`,
+                    { parse_mode: 'HTML' }
+                  ).catch(() => {});
+                }
+              }
+            }
+          }
         }
       }
     }
