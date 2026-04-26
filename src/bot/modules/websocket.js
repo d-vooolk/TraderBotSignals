@@ -40,7 +40,11 @@ export const startWebSocket = async (bot) => {
   console.info("Старт WebSocket Binance...");
 
   const symbols = await fetchFuturesSymbols();
-  if (symbols.length === 0) return console.error("❌ Список монет пуст, WebSocket не запущен.");
+  if (symbols.length === 0) {
+    console.error("❌ Список монет пуст, повтор через 60s...");
+    setTimeout(() => startWebSocket(bot), 60_000);
+    return;
+  }
   wsStatus.symbolsCount = symbols.length;
 
   const batchSize = 200;
