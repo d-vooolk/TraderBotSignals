@@ -10,8 +10,11 @@ export const getSendData = async (
   candles,
   changePriceSignal,
   direction = null,
+  interval = SETTINGS.candlestick.interval,
+  limit = SETTINGS.candlestick.limit,
+  skipChart = false,
 ) => {
-  const chartUrl = await generateChartURL(candles);
+  const chartUrl = skipChart ? null : await generateChartURL(candles);
 
   let tradeParams = null;
   if (direction) {
@@ -30,7 +33,7 @@ export const getSendData = async (
   }
 
   const message = formatCoinResponse({coinSymbol, futuresData, changePriceSignal, tradeParams});
-  const buttons = Markup.inlineKeyboard(generateButtons(coinSymbol, tradeParams));
+  const buttons = Markup.inlineKeyboard(generateButtons(coinSymbol, tradeParams, interval, limit));
 
   return [chartUrl, message, buttons, candles];
 };

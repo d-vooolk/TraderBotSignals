@@ -84,6 +84,8 @@ export const startWebSocket = async (bot) => {
 
     // Историю накапливаем только по закрытым свечам — не по промежуточным
     if (isClosed) {
+      data.lastChange = 0;
+
       data.closes.push(closePrice);
       if (data.closes.length > 25) data.closes.shift();
 

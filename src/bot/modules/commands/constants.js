@@ -1,6 +1,7 @@
 export const COMMANDS = {
-    settings: 'settings',
-    status:   'status',
+    settings:  'settings',
+    status:    'status',
+    positions: 'positions',
 }
 
 export const MESSAGES_TEXT = {
@@ -31,6 +32,7 @@ export const SETTINGS_OPTIONS = {
 };
 
 export const COMMANDS_LIST = [
-    { command: "settings", description: "Настройки бота" },
-    { command: "status",   description: "Статус бота" },
+    { command: "settings",  description: "Настройки бота" },
+    { command: "status",    description: "Статус бота" },
+    { command: "positions", description: "Открытые позиции" },
 ];

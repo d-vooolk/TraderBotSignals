@@ -1,6 +1,6 @@
 import {buildMainKeyboard, MENU_TITLE} from "../settingsKeyboards.js";
 import {wsStatus} from "../websocket.js";
-import {getDailyPnl} from "../../../api/binanceTradingApi.js";
+import {getDailyPnl, getOpenPositions} from "../../../api/binanceTradingApi.js";
 
 export const settingsHandler = (context) => {
     context.reply(MENU_TITLE, {reply_markup: buildMainKeyboard()});
@@ -9,6 +9,38 @@ export const settingsHandler = (context) => {
 const toMsk = (iso) => {
     const d = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
     return d.toISOString().slice(0, 16).replace('T', ' ') + ' MSK';
+};
+
+const fmtPositionPrice = (n) => {
+    const num = parseFloat(n);
+    if (isNaN(num) || num === 0) return '—';
+    if (num >= 1000) return num.toFixed(2);
+    if (num >= 1)    return num.toFixed(3);
+    if (num >= 0.01) return num.toFixed(5);
+    return num.toFixed(7);
+};
+
+export const positionsHandler = async (context) => {
+    const positions = await getOpenPositions();
+
+    if (!positions.length) {
+        return context.reply('📭 Нет открытых позиций.');
+    }
+
+    const lines = positions.map(p => {
+        const amt   = parseFloat(p.positionAmt);
+        const side  = amt > 0 ? '🟩 LONG' : '🟥 SHORT';
+        const pnl   = parseFloat(p.unrealizedProfit).toFixed(2);
+        const pnlMark = parseFloat(pnl) >= 0 ? '✅' : '❌';
+        return `${side} *${p.symbol}*\n` +
+               `Вход: \`${fmtPositionPrice(p.entryPrice)}\` | Маркет: \`${fmtPositionPrice(p.markPrice)}\`\n` +
+               `${pnlMark} PnL: *$${pnl}*`;
+    });
+
+    context.reply(
+        `📊 *Позиции (${positions.length})*\n\n` + lines.join('\n\n'),
+        { parse_mode: 'Markdown' }
+    );
 };
 
 export const statusHandler = async (context) => {

@@ -104,6 +104,9 @@ export const placeTradeWithSLTP = async ({
 
   const quantity = fmtQty((usdtMargin * leverage) / entryPrice);
 
+  if (quantity <= 0) throw new Error('Размер позиции 0. Увеличь маржу или плечо.');
+  if (quantity * entryPrice < 20) throw new Error(`Номинал позиции $${(quantity * entryPrice).toFixed(2)} < минимума $20. Увеличь маржу или плечо.`);
+
   // п.13: лимитный вход — пробуем LIMIT FOK, иначе MARKET
   let order;
   const openExtra = hedgeMode ? { positionSide: posSide } : {};
@@ -224,5 +227,14 @@ export const getOpenPosition = async (symbol) => {
     return data?.find(p => parseFloat(p.positionAmt) !== 0) ?? null;
   } catch {
     return null;
+  }
+};
+
+export const getOpenPositions = async () => {
+  try {
+    const data = await authRequest('GET', '/fapi/v2/positionRisk');
+    return data?.filter(p => parseFloat(p.positionAmt) !== 0) ?? [];
+  } catch {
+    return [];
   }
 };

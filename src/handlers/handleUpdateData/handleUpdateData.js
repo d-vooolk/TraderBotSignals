@@ -34,7 +34,7 @@ export const handleUpdateCallback = async (context) => {
 
       // direction передаётся из оригинального сигнала — getSendData пересчитает
       // точку входа по текущей цене и создаст свежую запись в tradeStore
-      const [chartUrl, message, buttons] = await getSendData(coinSymbol, futuresData, candles, null, direction);
+      const [chartUrl, message, buttons] = await getSendData(coinSymbol, futuresData, candles, null, direction, interval, parseInt(limit));
 
       if (chartUrl) {
         try {
