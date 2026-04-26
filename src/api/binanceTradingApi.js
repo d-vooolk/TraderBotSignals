@@ -107,6 +107,7 @@ export const placeTradeWithSLTP = async ({
   const fmtPrice = (v) => roundToStep(v, tickSize);
 
   const quantity = fmtQty((usdtMargin * leverage) / entryPrice);
+  console.log('[placeTradeWithSLTP]', symbol, 'qty:', quantity, 'step:', stepSize, 'tick:', tickSize, 'raw:', (usdtMargin * leverage) / entryPrice);
 
   if (quantity <= 0) throw new Error('Размер позиции 0. Увеличь маржу или плечо.');
   if (quantity * entryPrice < 20) throw new Error(`Номинал позиции $${(quantity * entryPrice).toFixed(2)} < минимума $20. Увеличь маржу или плечо.`);

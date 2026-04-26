@@ -237,6 +237,7 @@ export const autoTrader = {
 
     } catch (err) {
       console.error('autoTrader.execute error:', err?.response?.data || err.message);
+      console.error('autoTrader.execute request:', err?.config?.url, err?.config?.data);
       if (chatId && telegram) {
         telegram.sendMessage(
           chatId,
