@@ -150,7 +150,7 @@ export const autoTrader = {
     return isStopHit();
   },
 
-  async execute(coinSymbol, direction, telegram) {
+  async execute(coinSymbol, direction, telegram, currentPrice = null) {
     checkReset();
     if (!_enabled) return;
     if (isStopHit()) {
@@ -161,16 +161,21 @@ export const autoTrader = {
     const chatId = SETTINGS.savedChatId;
 
     try {
-      const balance = await getUsdtBalance();
+      const [balance, existing] = await Promise.all([
+        getUsdtBalance(),
+        getOpenPosition(`${coinSymbol.toUpperCase()}USDT`),
+      ]);
       if (balance < 5) return;
-
-      const existing = await getOpenPosition(`${coinSymbol}USDT`);
       if (existing) return;
 
-      const freshData = await getBinanceFuturesPrice(coinSymbol);
-      if (!freshData?.price) return;
+      // Используем цену из WebSocket — она уже актуальна, API запрос не нужен
+      let entryPrice = currentPrice;
+      if (!entryPrice) {
+        const freshData = await getBinanceFuturesPrice(coinSymbol);
+        if (!freshData?.price) return;
+        entryPrice = parseFloat(freshData.price);
+      }
 
-      const entryPrice             = parseFloat(freshData.price);
       const { leverage, depositPercent } = SETTINGS.autoTrade;
       const usdtMargin             = balance * (depositPercent / 100);
       const side                   = direction === 'up' ? 'BUY' : 'SELL';

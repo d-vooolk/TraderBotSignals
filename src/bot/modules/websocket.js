@@ -151,8 +151,8 @@ export const startWebSocket = async (bot) => {
 
     if (bot && SETTINGS.savedChatId) {
       if (autoTrader.isEnabled()) {
-        // Автотрейдинг: исполняем без сигнального сообщения
-        autoTrader.execute(coinSymbol, direction, bot.telegram);
+        // Автотрейдинг: передаём текущую цену из WebSocket — не нужен отдельный API запрос
+        autoTrader.execute(coinSymbol, direction, bot.telegram, closePrice);
       } else {
         // Ручной режим: отправляем сигнал с кнопкой
         handleCoinPriceRequest(bot, SETTINGS.savedChatId, coinSymbol, absChange.toFixed(2), direction);

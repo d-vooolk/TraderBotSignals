@@ -66,10 +66,19 @@ export const getUsdtBalance = async () => {
   return parseFloat(asset?.availableBalance ?? 0);
 };
 
+let _positionModeCache = null;
+let _positionModeCacheTime = 0;
+
 const getPositionMode = async () => {
+  const now = Date.now();
+  if (_positionModeCache !== null && now - _positionModeCacheTime < 3_600_000) {
+    return _positionModeCache;
+  }
   try {
     const data = await authRequest('GET', '/fapi/v1/positionSide/dual');
-    return data.dualSidePosition === true;
+    _positionModeCache = data.dualSidePosition === true;
+    _positionModeCacheTime = now;
+    return _positionModeCache;
   } catch {
     return false;
   }
