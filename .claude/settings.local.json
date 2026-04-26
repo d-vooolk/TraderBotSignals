@@ -8,7 +8,11 @@
       "Read(//c/Users/Dmitriy/.ssh/**)",
       "Bash(pip install *)",
       "Bash(pip3 install *)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(node --input-type=module --check)",
+      "Bash(node -e ' *)",
+      "Bash(npm show *)",
+      "Bash(npm install *)"
     ]
   }
 }

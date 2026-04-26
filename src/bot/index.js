@@ -11,10 +11,14 @@ dotenv.config();
 const bot = new Telegraf(process.env.BOT_TOKEN);
 bot.use(session());
 
-// Пропускаем только владельца бота (первый кто написал)
+if (!SETTINGS.savedChatId) {
+  console.warn('⚠️  CHAT_ID не настроен — первый кто напишет боту станет владельцем.');
+}
+
 bot.use((ctx, next) => {
   if (!SETTINGS.savedChatId) return next();
   if (String(ctx.from?.id) === String(SETTINGS.savedChatId)) return next();
+  // Неизвестный пользователь — игнорируем без ответа
 });
 
 bot.telegram.setMyCommands(COMMANDS_LIST)

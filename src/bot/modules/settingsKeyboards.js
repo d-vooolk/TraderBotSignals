@@ -22,10 +22,20 @@ export const buildMainKeyboard = () => ({
   inline_keyboard: [
     [
       {text: `💰 Позиция: ${SETTINGS.trade.depositPercent}%`, callback_data: 'settings_show_deposit'},
-      {text: `⚡ Плечо: ${SETTINGS.trade.leverage}x`, callback_data: 'settings_show_leverage'},
+      {text: `⚡ Плечо: ${SETTINGS.trade.leverage}x`,         callback_data: 'settings_show_leverage'},
     ],
     [
       {text: `🛡 SL ${SETTINGS.trade.slPercent}% / TP ${SETTINGS.trade.tpPercent}%`, callback_data: 'settings_show_sltp'},
+    ],
+    [
+      {
+        text: SETTINGS.trade.trailingStop ? '🔄 Трейлинг-стоп: ВКЛ' : '🔄 Трейлинг-стоп: ВЫКЛ',
+        callback_data: 'settings_toggle_trailing',
+      },
+      {
+        text: SETTINGS.trade.limitEntry ? '📊 Лимит-вход: ВКЛ' : '📊 Лимит-вход: ВЫКЛ',
+        callback_data: 'settings_toggle_limit',
+      },
     ],
   ],
 });

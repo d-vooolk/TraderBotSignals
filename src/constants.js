@@ -25,6 +25,8 @@ export const DEFAULT_SETTINGS = {
     depositPercent: 10,
     slPercent: 2,
     tpPercent: 4,
+    trailingStop: false,
+    limitEntry: false,
   },
   savedChatId: null,
 };

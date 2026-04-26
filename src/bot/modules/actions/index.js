@@ -69,4 +69,20 @@ export const setupActions = (bot) => {
     await ctx.answerCbQuery(`✅ SL ${sl}% / TP ${tp}%`);
     await ctx.editMessageText(MENU_TITLE, {reply_markup: buildMainKeyboard()});
   });
+
+  bot.action(BOT_COMMANDS_DATA.settingsToggleTrailing, async (ctx) => {
+    SETTINGS.trade.trailingStop = !SETTINGS.trade.trailingStop;
+    saveSettings(SETTINGS);
+    const state = SETTINGS.trade.trailingStop ? 'ВКЛ' : 'ВЫКЛ';
+    await ctx.answerCbQuery(`🔄 Трейлинг-стоп: ${state}`);
+    await ctx.editMessageText(MENU_TITLE, {reply_markup: buildMainKeyboard()});
+  });
+
+  bot.action(BOT_COMMANDS_DATA.settingsToggleLimit, async (ctx) => {
+    SETTINGS.trade.limitEntry = !SETTINGS.trade.limitEntry;
+    saveSettings(SETTINGS);
+    const state = SETTINGS.trade.limitEntry ? 'ВКЛ' : 'ВЫКЛ';
+    await ctx.answerCbQuery(`📊 Лимит-вход: ${state}`);
+    await ctx.editMessageText(MENU_TITLE, {reply_markup: buildMainKeyboard()});
+  });
 };

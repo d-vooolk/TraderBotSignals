@@ -23,13 +23,15 @@ const executeOpenTrade = async (ctx, trade) => {
   const side       = trade.direction === 'up' ? 'BUY' : 'SELL';
 
   const result = await placeTradeWithSLTP({
-    symbol:     `${trade.coinSymbol}USDT`,
+    symbol:       `${trade.coinSymbol}USDT`,
     side,
-    entryPrice: trade.entryPrice,
+    entryPrice:   trade.entryPrice,
     usdtMargin,
-    leverage:   SETTINGS.trade.leverage,
-    slPercent:  SETTINGS.trade.slPercent,
-    tpPercent:  SETTINGS.trade.tpPercent,
+    leverage:     SETTINGS.trade.leverage,
+    slPercent:    SETTINGS.trade.slPercent,
+    tpPercent:    SETTINGS.trade.tpPercent,
+    trailingStop: SETTINGS.trade.trailingStop,
+    limitEntry:   SETTINGS.trade.limitEntry,
   });
 
   logTrade({
@@ -38,23 +40,35 @@ const executeOpenTrade = async (ctx, trade) => {
     side,
     fillPrice:  result.fillPrice,
     slPrice:    result.slPrice,
+    tp1Price:   result.tp1Price,
     tpPrice:    result.tpPrice,
     quantity:   result.quantity,
     margin:     usdtMargin,
     leverage:   SETTINGS.trade.leverage,
   });
 
-  const emoji = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
+  const emoji    = side === 'BUY' ? '🟩 LONG' : '🟥 SHORT';
+  const slLabel  = SETTINGS.trade.trailingStop ? `🔄 Трейлинг ${SETTINGS.trade.slPercent}%` : `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)`;
+
   await ctx.reply(
     `✅ <b>Позиция открыта!</b>\n\n` +
     `${emoji} <b>${trade.coinSymbol}</b>\n` +
     `📊 Кол-во: <code>${result.quantity}</code>\n` +
     `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${SETTINGS.trade.leverage}x)\n` +
     `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
-    `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)\n` +
-    `🎯 TP: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%)`,
+    `${slLabel}\n` +
+    `🎯 TP1: <code>$${result.tp1Price}</code>  (+${SETTINGS.trade.slPercent}%) — 50%\n` +
+    `🎯 TP2: <code>$${result.tpPrice}</code>  (+${SETTINGS.trade.tpPercent}%) — 50%`,
     {parse_mode: 'HTML'}
   );
+
+  // п.3: позиция открыта, но SL/TP не выставились — предупреждаем
+  if (result.slTpError) {
+    await ctx.reply(
+      `⚠️ <b>Внимание!</b> Позиция открыта, но SL/TP не выставились:\n<code>${result.slTpError}</code>\n\nВыстави стоп вручную на Binance!`,
+      {parse_mode: 'HTML'}
+    );
+  }
 };
 
 export const handleTradeCallback = async (ctx) => {

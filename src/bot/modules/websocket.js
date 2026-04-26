@@ -7,6 +7,12 @@ const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${stream
 
 export const wsStatus = {running: false, symbolsCount: 0, lastSignalAt: null, lastCandleAt: null};
 
+const cache1h = {};           // symbol -> { data, ts }
+const CACHE_1H_TTL = 60_000; // 60 секунд
+
+const signalCooldown = {};        // symbol -> timestamp
+const SIGNAL_COOLDOWN = 5 * 60_000; // 5 минут между сигналами на одну монету
+
 const calculateRSI = (closes, period = 14) => {
   if (closes.length < period + 1) return 50;
   const recent = closes.slice(-(period + 1));
@@ -24,13 +30,18 @@ const calculateRSI = (closes, period = 14) => {
 
 const check1hConfirmation = async (symbol, direction) => {
   try {
-    const candles = await getFuturesCandlestickData({symbol: `${symbol.toUpperCase()}USDT`, interval: '1h', limit: 2});
+    const now = Date.now();
+    const cached = cache1h[symbol];
+    const needsFetch = !cached || now - cached.ts >= CACHE_1H_TTL;
+    const candles = needsFetch
+      ? await getFuturesCandlestickData({symbol: `${symbol.toUpperCase()}USDT`, interval: '1h', limit: 2})
+      : cached.data;
+    if (needsFetch && candles) cache1h[symbol] = {data: candles, ts: now};
+
     if (!candles || candles.length < 1) return true;
     const c = candles[candles.length - 1];
     const change1h = parseFloat(c[4]) - parseFloat(c[1]);
-    if (direction === 'up' && change1h < 0) return false;
-    if (direction === 'down' && change1h > 0) return false;
-    return true;
+    return direction === 'up' ? change1h >= 0 : change1h <= 0;
   } catch {
     return true;
   }
@@ -114,6 +125,11 @@ export const startWebSocket = async (bot) => {
     // 6. Подтверждение на 1h таймфрейме
     const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
     if (!confirmed) return;
+
+    // 7. Кулдаун: не слать повторный сигнал по той же монете в течение 5 минут
+    const now = Date.now();
+    if (now - (signalCooldown[symbol] || 0) < SIGNAL_COOLDOWN) return;
+    signalCooldown[symbol] = now;
 
     wsStatus.lastSignalAt = new Date().toISOString();
     console.info(`🚀 [ALERT] ${symbol.toUpperCase()} ${dirEmoji} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
