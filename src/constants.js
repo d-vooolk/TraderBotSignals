@@ -18,10 +18,11 @@ export const DEFAULT_SETTINGS = {
   },
   handler: {
     temporaryCandle: "15m",
-    priceChangeThreshold: 3,
+    priceChangeThreshold: 2,
     signalCooldownMin: 10,
     slCooldownMin: 45,
     volumeMultiplier: 2,
+    minVolumeUsdt: 200000,
     rsiOverbought: 70,
     rsiOversold: 30,
   },

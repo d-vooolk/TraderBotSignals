@@ -110,6 +110,10 @@ export const startWebSocket = async (bot) => {
       const avg  = prev.reduce((a, b) => a + b, 0) / prev.length;
       const multiplier = SETTINGS.handler.volumeMultiplier ?? 2;
       if (avg > 0 && volume < multiplier * avg) return;
+
+      // 3b. Абсолютный минимум объёма — фильтрует микрокапы
+      const minVol = SETTINGS.handler.minVolumeUsdt ?? 200_000;
+      if (avg < minVol) return;
     }
 
     // 4. RSI-фильтр: не входим в уже перекупленный/перепроданный рынок
@@ -128,18 +132,18 @@ export const startWebSocket = async (bot) => {
       if (direction === 'down' && closePrice > sma10) return;
     }
 
-    // 6. Подтверждение на 1h таймфрейме
-    const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
-    if (!confirmed) return;
-
-    // 7. Пост-SL кулдаун: не входить повторно если последняя сделка закрылась в SL
+    // 6. Пост-SL кулдаун: не входить повторно если последняя сделка закрылась в SL
     if (isSlCoolingDown(symbol)) return;
 
-    // 8. Общий кулдаун между сигналами на одну монету
+    // 7. Общий кулдаун — СИНХРОННО до любых await, чтобы избежать гонки
     const now = Date.now();
     const signalCooldownMs = (SETTINGS.handler.signalCooldownMin ?? 10) * 60_000;
     if (now - (signalCooldown[symbol] || 0) < signalCooldownMs) return;
     signalCooldown[symbol] = now;
+
+    // 8. Подтверждение на 1h таймфрейме (async — после кулдауна, чтобы не было гонки)
+    const confirmed = await check1hConfirmation(symbol.slice(0, -4), direction);
+    if (!confirmed) return;
 
     wsStatus.lastSignalAt = new Date().toISOString();
     const coinSymbol = symbol.slice(0, -4);
