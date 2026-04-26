@@ -1,6 +1,21 @@
 import fs from "fs";
 import {DEFAULT_SETTINGS, SETTINGS_FILE, SETTINGS_TEXT} from "./constants.js";
 
+const deepMerge = (defaults, saved) => {
+  const result = { ...defaults };
+  for (const key of Object.keys(saved)) {
+    if (
+      typeof saved[key] === 'object' && saved[key] !== null &&
+      !Array.isArray(saved[key]) && typeof defaults[key] === 'object'
+    ) {
+      result[key] = deepMerge(defaults[key], saved[key]);
+    } else {
+      result[key] = saved[key];
+    }
+  }
+  return result;
+};
+
 const applyEnvChatId = (settings) => {
   const raw = process.env.CHAT_ID?.trim();
   if (!raw) return settings;
@@ -13,7 +28,7 @@ const loadSettings = () => {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const data = fs.readFileSync(SETTINGS_FILE, "utf8");
-      return applyEnvChatId(JSON.parse(data));
+      return applyEnvChatId(deepMerge(DEFAULT_SETTINGS, JSON.parse(data)));
     }
   } catch (error) {
     console.error(SETTINGS_TEXT.settingsError, error);

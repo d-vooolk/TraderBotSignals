@@ -1,10 +1,28 @@
 import {timeframes} from "../constants/buttons.js";
 import {Markup} from "telegraf";
+import {tradeStore} from "./tradeStore.js";
+import {SETTINGS} from "../../settings.js";
 
-export const generateButtons = (coinSymbol) => {
-  const topLine = timeframes.map(({ label, interval, limit }) =>
+const hasApiKeys = () => !!(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET);
+
+export const generateButtons = (coinSymbol, tradeParams = null) => {
+  const topLine = timeframes.map(({label, interval, limit}) =>
     Markup.button.callback(label, `update_${coinSymbol}_${interval}_${limit}`)
   );
 
-  return [topLine];
+  const bottomLine = [
+    Markup.button.url('🔗 Binance', `https://www.binance.com/futures/${coinSymbol}USDT`),
+  ];
+
+  if (tradeParams && hasApiKeys()) {
+    const tradeId = Math.random().toString(36).slice(2, 8);
+    const label   = tradeParams.direction === 'up'
+      ? `✅ LONG ${SETTINGS.trade.leverage}x`
+      : `✅ SHORT ${SETTINGS.trade.leverage}x`;
+
+    tradeStore.set(tradeId, {coinSymbol, ...tradeParams});
+    bottomLine.unshift(Markup.button.callback(label, `openTrade_${tradeId}`));
+  }
+
+  return [topLine, bottomLine];
 };

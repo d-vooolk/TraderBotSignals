@@ -1,6 +1,7 @@
 import {
   handleUpdateCallback
 } from "../../../handlers/handleUpdateData/handleUpdateData.js";
+import {handleTradeCallback} from "../../../handlers/handleUpdateData/handleTradeCallback.js";
 import {BOT_COMMANDS_DATA} from "../commands/constants.js";
 import {ACTIONS_TEXT} from "./constants.js";
 import {SETTINGS} from "../../../settings.js";
@@ -13,6 +14,15 @@ export const setupActions = (bot) => {
     } catch (error) {
       console.error(ACTIONS_TEXT.updateError, error);
       await context.reply(ACTIONS_TEXT.updateError);
+    }
+  });
+
+  bot.action(BOT_COMMANDS_DATA.openTrade, async (context) => {
+    try {
+      await handleTradeCallback(context);
+    } catch (error) {
+      console.error("Ошибка при открытии сделки:", error);
+      await context.reply("❌ Ошибка при открытии сделки.");
     }
   });
 

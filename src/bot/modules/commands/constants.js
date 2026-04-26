@@ -23,6 +23,7 @@ export const MESSAGES_TEXT = {
 
 export const BOT_COMMANDS_DATA = {
     update: /^update_(.+)$/,
+    openTrade: /^openTrade_(.+)$/,
     setInterval: 'set_interval',
     setPercents: 'set_percent',
     showSettings: 'show_settings',

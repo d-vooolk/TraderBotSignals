@@ -20,5 +20,9 @@ export const DEFAULT_SETTINGS = {
     temporaryCandle: "15m",
     priceChangeThreshold: 3,
   },
+  trade: {
+    leverage: 5,
+    depositPercent: 10,
+  },
   savedChatId: null,
 };
