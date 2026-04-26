@@ -1,10 +1,10 @@
-import { getOpenPosition, cancelAllSymbolOrders } from '../../api/binanceTradingApi.js';
+import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WATCH_MS = 48 * 60 * 60 * 1000;
 
-export const startPositionWatcher = (symbol, telegram) => {
+export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
   const chatId = SETTINGS.savedChatId;
   if (!chatId) return;
 
@@ -28,6 +28,8 @@ export const startPositionWatcher = (symbol, telegram) => {
       if (!hasSeenPosition) return; // Позиция ещё не зарегистрировалась на бирже
 
       clearInterval(interval);
+      // Отменяем по сохранённым algoId (точно) + по символу (резервно)
+      await cancelAlgoOrdersById(algoIds);
       await cancelAllSymbolOrders(symbol);
       await telegram.sendMessage(
         chatId,

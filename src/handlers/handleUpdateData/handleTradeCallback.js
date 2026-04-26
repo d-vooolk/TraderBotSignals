@@ -71,7 +71,7 @@ const executeOpenTrade = async (ctx, trade) => {
     );
   }
 
-  startPositionWatcher(`${trade.coinSymbol}USDT`, ctx.telegram);
+  startPositionWatcher(`${trade.coinSymbol}USDT`, ctx.telegram, result.algoIds ?? []);
 };
 
 export const handleTradeCallback = async (ctx) => {

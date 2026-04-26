@@ -148,9 +148,14 @@ export const placeTradeWithSLTP = async ({
   const qty2 = qty1 > 0 ? fmtQty(quantity - qty1) : quantity;
 
   // Binance с 2025-12-09 требует алго-эндпоинт для условных ордеров
-  const algoOrder = (params) => authRequest('POST', '/fapi/v1/algoOrder', {
-    algoType: 'CONDITIONAL', ...params,
-  });
+  const placedAlgoIds = [];
+  const algoOrder = async (params) => {
+    const result = await authRequest('POST', '/fapi/v1/algoOrder', {
+      algoType: 'CONDITIONAL', ...params,
+    });
+    if (result?.algoId) placedAlgoIds.push(result.algoId);
+    return result;
+  };
 
   // Цены лимитного исполнения: небольшой offset от триггера чтобы ордер точно прошёл
   const tp1LimitPrice = fmtPrice(isLong ? actualTP1 * 0.999 : actualTP1 * 1.001);
@@ -198,7 +203,7 @@ export const placeTradeWithSLTP = async ({
     slTpError = err?.response?.data?.msg || err.message || 'Ошибка выставления SL/TP';
   }
 
-  return { quantity, fillPrice, slPrice: actualSL, tp1Price: actualTP1, tpPrice: actualTP2, slTpError };
+  return { quantity, fillPrice, slPrice: actualSL, tp1Price: actualTP1, tpPrice: actualTP2, slTpError, algoIds: placedAlgoIds };
 };
 
 export const getDailyPnl = async () => {
@@ -239,6 +244,16 @@ export const getOpenPositions = async () => {
   }
 };
 
+export const cancelAlgoOrdersById = async (algoIds) => {
+  if (!algoIds?.length) return;
+  await Promise.all(algoIds.map(algoId =>
+    authRequest('DELETE', '/fapi/v1/algoOrder', { algoId }).catch(err => {
+      const code = err?.response?.data?.code;
+      if (code !== -2011) console.error('cancelAlgoOrder error:', algoId, err?.response?.data || err.message);
+    })
+  ));
+};
+
 export const cancelAllSymbolOrders = async (symbol) => {
   // Отменяем обычные условные ордера (STOP, TAKE_PROFIT)
   try {
@@ -248,14 +263,18 @@ export const cancelAllSymbolOrders = async (symbol) => {
     if (code !== -2011) console.error('cancelAllOpenOrders error:', err?.response?.data || err.message);
   }
 
-  // Отменяем algo-ордера (CONDITIONAL через /fapi/v1/algoOrder)
+  // Резервная попытка отмены algo-ордеров по символу (если algoIds не переданы)
   try {
     const res = await authRequest('GET', '/fapi/v1/openAlgoOrders', { symbol });
     const orders = res?.orders ?? [];
-    await Promise.all(orders.map(o =>
-      authRequest('DELETE', '/fapi/v1/algoOrder', { algoId: o.algoId }).catch(() => {})
-    ));
-  } catch {
-    // Endpoint может отличаться — не критично
+    if (orders.length) {
+      await Promise.all(orders.map(o =>
+        authRequest('DELETE', '/fapi/v1/algoOrder', { algoId: o.algoId }).catch(err => {
+          console.error('cancelAlgoOrder (by symbol) error:', o.algoId, err?.response?.data || err.message);
+        })
+      ));
+    }
+  } catch (err) {
+    console.error('openAlgoOrders fetch error:', err?.response?.data || err.message);
   }
 };
