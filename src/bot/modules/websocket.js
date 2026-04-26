@@ -169,13 +169,13 @@ export const startWebSocket = async (bot) => {
   // symbol -> { lastChange, closes[], highs[], lows[], volumes[] }
   const symbolData = {};
 
-  const fireSignal = (coinSymbol, direction, absChange, closePrice) => {
+  const fireSignal = (coinSymbol, direction, absChange, closePrice, signalType = 'momentum') => {
     wsStatus.lastSignalAt = new Date().toISOString();
     const dirEmoji = direction === 'up' ? '📈 ВЫРОСЛА' : '📉 УПАЛА';
-    console.info(`🚀 [ALERT] ${coinSymbol.toUpperCase()}USDT ${dirEmoji} на ${absChange.toFixed(2)}% за ${SETTINGS.handler.temporaryCandle}.`);
+    console.info(`🚀 [${signalType.toUpperCase()}] ${coinSymbol.toUpperCase()}USDT ${dirEmoji} ${absChange > 0 ? `на ${absChange.toFixed(2)}%` : ''}`);
     if (bot && SETTINGS.savedChatId) {
       if (autoTrader.isEnabled()) {
-        autoTrader.execute(coinSymbol, direction, bot.telegram, closePrice);
+        autoTrader.execute(coinSymbol, direction, bot.telegram, closePrice, signalType);
       } else {
         handleCoinPriceRequest(bot, SETTINGS.savedChatId, coinSymbol, absChange.toFixed(2), direction);
       }
@@ -213,8 +213,7 @@ export const startWebSocket = async (bot) => {
         const cooldownMs = (SETTINGS.handler.signalCooldownMin ?? 10) * 60_000;
         if (now - (signalCooldown[symbol] || 0) >= cooldownMs) {
           signalCooldown[symbol] = now;
-          console.info(`🔄 [BB RE-ENTRY] ${symbol.toUpperCase()} ${reentryDir === 'up' ? '↑' : '↓'}`);
-          fireSignal(coinSymbol, reentryDir, 0, closePrice);
+          fireSignal(coinSymbol, reentryDir, 0, closePrice, 'bb_reentry');
         }
       }
 
@@ -241,13 +240,11 @@ export const startWebSocket = async (bot) => {
 
             if (volOk && notCooling) {
               signalCooldown[symbol] = now;
-              wsStatus.lastSignalAt  = new Date().toISOString();
               const arrow = bbDir === 'up' ? '↑' : '↓';
-              console.info(`🟣 [BB] ${symbol.toUpperCase()} ${arrow}`);
 
               if (bot && SETTINGS.savedChatId) {
                 if (autoTrader.isEnabled()) {
-                  autoTrader.execute(coinSymbol, bbDir, bot.telegram, closePrice);
+                  fireSignal(coinSymbol, bbDir, 0, closePrice, 'bb_reversal');
                 } else {
                   const band = bbDir === 'up' ? 'нижнюю' : 'верхнюю';
                   bot.telegram.sendMessage(

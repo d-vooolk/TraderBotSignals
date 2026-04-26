@@ -83,6 +83,7 @@ export const startPositionWatcher = (symbol, telegram, algoIds = [], onClose = n
       clearInterval(interval);
       await cancelAlgoOrdersById(algoIds);
       await cancelAllSymbolOrders(symbol);
+      await new Promise(r => setTimeout(r, 1500)); // даём Binance время записать income
 
       const { pnl, closeReason } = await getSymbolCloseSummary(symbol, openTime);
 

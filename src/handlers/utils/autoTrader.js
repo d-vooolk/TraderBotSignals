@@ -150,7 +150,7 @@ export const autoTrader = {
     return isStopHit();
   },
 
-  async execute(coinSymbol, direction, telegram, currentPrice = null) {
+  async execute(coinSymbol, direction, telegram, currentPrice = null, signalType = 'momentum') {
     checkReset();
     if (!_enabled) return;
     if (isStopHit()) {
@@ -197,11 +197,11 @@ export const autoTrader = {
         coinSymbol, direction, side,
         fillPrice:  result.fillPrice,
         slPrice:    result.slPrice,
-        tp1Price:   result.tp1Price,
         tpPrice:    result.tpPrice,
         quantity:   result.quantity,
         margin:     usdtMargin,
         leverage,
+        signalType,
         auto:       true,
       });
 
@@ -210,12 +210,13 @@ export const autoTrader = {
       const slLabel = SETTINGS.trade.trailingStop
         ? `🔄 Трейлинг ${SETTINGS.trade.slPercent}% (с +${beAt}%)`
         : `🛑 SL: <code>$${result.slPrice}</code>  (-${SETTINGS.trade.slPercent}%)`;
+      const signalLabel = { momentum: '⚡ Импульс', bb_reversal: '🟣 BB-Разворот', bb_reentry: '🔄 BB-Перезаход' }[signalType] ?? '⚡ Импульс';
 
       if (chatId && telegram) {
         await telegram.sendMessage(
           chatId,
           `🤖 <b>Авто-сделка открыта</b>\n\n` +
-          `${emoji} <b>${coinSymbol}</b>\n` +
+          `${emoji} <b>${coinSymbol}</b>  [${signalLabel}]\n` +
           `📊 Кол-во: <code>${result.quantity}</code>\n` +
           `💰 Маржа: <code>$${usdtMargin.toFixed(2)}</code> (${leverage}x)\n` +
           `🎯 Вход: <code>$${result.fillPrice}</code>\n` +
