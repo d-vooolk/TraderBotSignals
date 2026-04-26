@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS = {
     temporaryCandle: "15m",
     priceChangeThreshold: 2,
     signalCooldownMin: 10,
-    slCooldownMin: 45,
+    slCooldownMin: 15,
     volumeMultiplier: 2,
     minVolumeUsdt: 200000,
     rsiOverbought: 70,
