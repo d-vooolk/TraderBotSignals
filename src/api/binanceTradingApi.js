@@ -98,19 +98,23 @@ export const placeTradeWithSLTP = async ({
     ? { positionSide: closePosSide }
     : { reduceOnly: 'true' };
 
-  // Используем quantityPrecision/pricePrecision напрямую — это авторитетные значения для -1111
-  const qtyDec   = info?.quantityPrecision ?? 3;
-  const priceDec = info?.pricePrecision    ?? 2;
+  // Количество: quantityPrecision (авторитетное значение для -1111)
+  // Цена: tickSize из PRICE_FILTER (цены должны быть кратны тику, не просто pricePrecision)
+  const qtyDec    = info?.quantityPrecision ?? 3;
+  const priceFilter = info?.filters?.find(f => f.filterType === 'PRICE_FILTER');
+  const tickSize  = parseFloat(priceFilter?.tickSize ?? '0.01');
+  const tickDecStr = tickSize.toFixed(10).replace(/0+$/, '');
+  const tickDec   = tickDecStr.includes('.') ? tickDecStr.split('.')[1].length : 0;
 
   const floorTo = (v, dec) => {
     const f = Math.pow(10, dec);
     return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(dec));
   };
   const fmtQty   = (v) => floorTo(v, qtyDec);
-  const fmtPrice = (v) => floorTo(v, priceDec);
+  const fmtPrice = (v) => floorTo(v, tickDec);
 
   const quantity = fmtQty((usdtMargin * leverage) / entryPrice);
-  console.log('[placeTradeWithSLTP]', symbol, 'qty:', quantity, 'qtyDec:', qtyDec, 'priceDec:', priceDec);
+  console.log('[placeTradeWithSLTP]', symbol, 'qty:', quantity, 'qtyDec:', qtyDec, 'tickDec:', tickDec);
 
   if (quantity <= 0) throw new Error('Размер позиции 0. Увеличь маржу или плечо.');
   if (quantity * entryPrice < 20) throw new Error(`Номинал позиции $${(quantity * entryPrice).toFixed(2)} < минимума $20. Увеличь маржу или плечо.`);
@@ -349,10 +353,13 @@ export const placeSLAtBreakeven = async (symbol, side, fillPrice, remainingQty, 
     ? { positionSide: closePosSide }
     : { reduceOnly: 'true' };
 
-  const priceDec = info?.pricePrecision ?? 2;
+  const priceFilter2 = info?.filters?.find(f => f.filterType === 'PRICE_FILTER');
+  const tickSize2    = parseFloat(priceFilter2?.tickSize ?? '0.01');
+  const tickDecStr2  = tickSize2.toFixed(10).replace(/0+$/, '');
+  const tickDec2     = tickDecStr2.includes('.') ? tickDecStr2.split('.')[1].length : 0;
   const fmtPrice = (v) => {
-    const f = Math.pow(10, priceDec);
-    return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(priceDec));
+    const f = Math.pow(10, tickDec2);
+    return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(tickDec2));
   };
 
   const triggerPrice = fmtPrice(fillPrice);
