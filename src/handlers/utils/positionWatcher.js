@@ -1,4 +1,4 @@
-import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById } from '../../api/binanceTradingApi.js';
+import { getOpenPosition, cancelAllSymbolOrders, cancelAlgoOrdersById, getSymbolCloseSummary } from '../../api/binanceTradingApi.js';
 import { SETTINGS } from '../../settings.js';
 
 const POLL_INTERVAL_MS = 15_000;
@@ -9,6 +9,7 @@ export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
   if (!chatId) return;
 
   let hasSeenPosition = false;
+  let openTime = null;
   const startTime = Date.now();
 
   const interval = setInterval(async () => {
@@ -21,7 +22,10 @@ export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
       const position = await getOpenPosition(symbol);
 
       if (position) {
-        hasSeenPosition = true;
+        if (!hasSeenPosition) {
+          hasSeenPosition = true;
+          openTime = Date.now();
+        }
         return;
       }
 
@@ -31,9 +35,19 @@ export const startPositionWatcher = (symbol, telegram, algoIds = []) => {
       // Отменяем по сохранённым algoId (точно) + по символу (резервно)
       await cancelAlgoOrdersById(algoIds);
       await cancelAllSymbolOrders(symbol);
+
+      const { pnl, closeReason } = await getSymbolCloseSummary(symbol, openTime);
+
+      const pnlStr = pnl !== null
+        ? `\n💰 PnL: <code>${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT</code> ${pnl >= 0 ? '✅' : '❌'}`
+        : '';
+      const reasonStr = closeReason
+        ? `\n📋 Причина: ${closeReason}`
+        : '';
+
       await telegram.sendMessage(
         chatId,
-        `🔔 <b>Позиция ${symbol} закрыта</b> — висящие ордера отменены.`,
+        `🔔 <b>Позиция ${symbol} закрыта</b>${reasonStr}${pnlStr}`,
         { parse_mode: 'HTML' }
       );
     } catch (err) {

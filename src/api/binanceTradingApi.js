@@ -278,3 +278,49 @@ export const cancelAllSymbolOrders = async (symbol) => {
     console.error('openAlgoOrders fetch error:', err?.response?.data || err.message);
   }
 };
+
+export const getSymbolCloseSummary = async (symbol, openTime) => {
+  let pnl = null;
+  let closeReason = null;
+
+  try {
+    const income = await authRequest('GET', '/fapi/v1/income', {
+      symbol,
+      incomeType: 'REALIZED_PNL',
+      startTime: openTime,
+      limit: 100,
+    });
+    pnl = income.reduce((sum, e) => sum + parseFloat(e.income), 0);
+  } catch (err) {
+    console.error('getSymbolCloseSummary pnl error:', err?.response?.data || err.message);
+  }
+
+  try {
+    const orders = await authRequest('GET', '/fapi/v1/allOrders', {
+      symbol,
+      startTime: openTime,
+      limit: 50,
+    });
+
+    const filled = orders.filter(o =>
+      o.status === 'FILLED' &&
+      ['TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'STOP', 'STOP_MARKET', 'TRAILING_STOP_MARKET'].includes(o.type)
+    );
+
+    const tpCount = filled.filter(o => o.type === 'TAKE_PROFIT' || o.type === 'TAKE_PROFIT_MARKET').length;
+    const hasSL   = filled.some(o => o.type === 'STOP' || o.type === 'STOP_MARKET');
+    const hasTS   = filled.some(o => o.type === 'TRAILING_STOP_MARKET');
+
+    const parts = [];
+    if (tpCount >= 2)      parts.push('🎯 TP1 + TP2');
+    else if (tpCount === 1) parts.push('🎯 TP1');
+    if (hasTS)              parts.push('🔄 Трейлинг');
+    else if (hasSL)         parts.push('🛑 SL');
+
+    closeReason = parts.join(' → ') || null;
+  } catch (err) {
+    console.error('getSymbolCloseSummary orders error:', err?.response?.data || err.message);
+  }
+
+  return { pnl, closeReason };
+};
