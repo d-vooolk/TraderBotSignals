@@ -159,8 +159,8 @@ export const placeTradeWithSLTP = async ({
   const actualTP1 = fmtPrice(isLong ? fillPrice * (1 + slPercent / 100) : fillPrice * (1 - slPercent / 100));
   const actualTP2 = fmtPrice(isLong ? fillPrice * (1 + tpPercent / 100) : fillPrice * (1 - tpPercent / 100));
 
-  // TP1 — 40%, TP2 — 60%. Если qty1 округляется до 0 — весь объём на TP2
-  const qty1 = fmtQty(quantity * 0.4);
+  // TP1 — 50%, TP2 — 50%. Если qty1 округляется до 0 — весь объём на TP2
+  const qty1 = fmtQty(quantity * 0.5);
   const qty2 = qty1 > 0 ? fmtQty(quantity - qty1) : quantity;
 
   // Binance с 2025-12-09 требует алго-эндпоинт для условных ордеров
