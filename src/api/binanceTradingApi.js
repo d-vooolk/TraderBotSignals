@@ -370,8 +370,9 @@ export const placeSLAtBreakeven = async (symbol, side, fillPrice, remainingQty, 
     return parseFloat((Math.floor(v * f + 1e-9) / f).toFixed(tickDec2));
   };
 
-  const triggerPrice = fmtPrice(fillPrice);
-  const limitPrice   = fmtPrice(isLong ? fillPrice * 0.998 : fillPrice * 1.002);
+  // Ставим SL чуть выше точки входа — закрываемся в небольшой плюс а не в ноль
+  const triggerPrice = fmtPrice(isLong ? fillPrice * 1.0015 : fillPrice * 0.9985);
+  const limitPrice   = fmtPrice(isLong ? triggerPrice * 0.998 : triggerPrice * 1.002);
 
   await authRequest('POST', '/fapi/v1/algoOrder', {
     algoType: 'CONDITIONAL',
