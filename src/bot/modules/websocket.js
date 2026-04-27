@@ -5,6 +5,7 @@ import { SETTINGS } from "../../settings.js";
 import { isSlCoolingDown } from "../../handlers/utils/slCooldown.js";
 import { autoTrader } from "../../handlers/utils/autoTrader.js";
 import { checkBBReentry } from "../../handlers/utils/bbReentry.js";
+import { checkTrendlineSignal } from "../../handlers/utils/trendlineSignal.js";
 
 const getWsUrl = (streams) => `wss://fstream.binance.com/stream?streams=${streams}`;
 
@@ -168,6 +169,7 @@ export const startWebSocket = async (bot) => {
 
   // symbol -> { lastChange, closes[], highs[], lows[], volumes[] }
   const symbolData = {};
+  const btcCloses  = [];
 
   const fireSignal = (coinSymbol, direction, absChange, closePrice, signalType = 'momentum') => {
     wsStatus.lastSignalAt = new Date().toISOString();
@@ -199,10 +201,16 @@ export const startWebSocket = async (bot) => {
 
     if (isClosed) {
       data.lastChange = 0;
-      data.closes.push(closePrice);  if (data.closes.length  > 25) data.closes.shift();
-      data.highs.push(highPrice);    if (data.highs.length   > 25) data.highs.shift();
-      data.lows.push(lowPrice);      if (data.lows.length    > 25) data.lows.shift();
-      data.volumes.push(volume);     if (data.volumes.length > 25) data.volumes.shift();
+      data.closes.push(closePrice);  if (data.closes.length  > 50) data.closes.shift();
+      data.highs.push(highPrice);    if (data.highs.length   > 50) data.highs.shift();
+      data.lows.push(lowPrice);      if (data.lows.length    > 50) data.lows.shift();
+      data.volumes.push(volume);     if (data.volumes.length > 50) data.volumes.shift();
+
+      // Track BTC closes separately for correlation filter
+      if (symbol === 'btcusdt') {
+        btcCloses.push(closePrice);
+        if (btcCloses.length > 50) btcCloses.shift();
+      }
 
       const coinSymbol = symbol.slice(0, -4);
 
@@ -259,6 +267,11 @@ export const startWebSocket = async (bot) => {
             }
           }
         }
+      }
+
+      // Trendline breakout signal (manual only — never fires autoTrader)
+      if (symbol !== 'btcusdt') {
+        checkTrendlineSignal(symbol, [...data.closes], [...data.volumes], [...btcCloses], bot?.telegram).catch(() => {});
       }
     }
 

@@ -44,5 +44,11 @@ export const DEFAULT_SETTINGS = {
     dailyStopLoss: 10,
     maxPositions: 5,
   },
+  trendSignal: {
+    minBreakPercent:    0.3,
+    maxBtcCorrelation:  0.65,
+    cooldownHours:      4,
+    minAvgVolumeUsdt:   500_000,
+  },
   savedChatId: null,
 };
