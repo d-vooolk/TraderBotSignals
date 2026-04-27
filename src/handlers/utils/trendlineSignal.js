@@ -4,6 +4,30 @@ import { generateTrendlineChart } from './chartGenerator.js';
 
 const trendCooldown = {}; // symbol -> timestamp
 
+const fmt = (p) => {
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1)    return p.toFixed(4);
+  if (p >= 0.01) return p.toFixed(5);
+  return p.toPrecision(4);
+};
+
+const getNextPivotLevels = (closes, direction, currentPrice) => {
+  const { highs, lows } = findPivots(closes.slice(0, -1));
+  if (direction === 'up') {
+    return highs
+      .filter(p => p.price > currentPrice)
+      .map(p => p.price)
+      .sort((a, b) => a - b)
+      .slice(0, 3);
+  } else {
+    return lows
+      .filter(p => p.price < currentPrice)
+      .map(p => p.price)
+      .sort((a, b) => b - a)
+      .slice(0, 3);
+  }
+};
+
 const pearsonCorr = (a, b) => {
   const n = Math.min(a.length, b.length);
   if (n < 10) return 0;
@@ -119,23 +143,48 @@ export const checkTrendlineSignal = async (symbol, closes, volumes, btcCloses, t
 
   trendCooldown[symbol] = now;
 
+  // Stagger 0–5 s so simultaneous signals don't arrive as a burst
+  await new Promise(r => setTimeout(r, Math.floor(Math.random() * 5000)));
+
   const arrow    = direction === 'up' ? '↑' : '↓';
   const strength = isStrong ? '🟢' : '🟡';
   const tfLabel  = isStrong ? '15m + 1h + 4h' : '15m + 1h';
   const dirLabel = direction === 'up' ? 'ПРОБОЙ ВВЕРХ' : 'ПРОБОЙ ВНИЗ';
   const price    = closes[closes.length - 1];
 
+  // S/R analysis
+  const brokenVal = direction === 'up'
+    ? breakout.resistLine?.valueAtN
+    : breakout.supportLine?.valueAtN;
+  const nextLevels = getNextPivotLevels(closes, direction, price);
+
+  const brokenText = brokenVal != null
+    ? `\n📍 Пробит: <code>$${fmt(brokenVal)}</code> → теперь ${direction === 'up' ? 'поддержка' : 'сопротивление'}`
+    : '';
+  const nextText = nextLevels.length > 0
+    ? '\n📌 Следующие уровни: ' + nextLevels.map(p => `<code>$${fmt(p)}</code>`).join(' → ')
+    : '';
+
   const caption =
     `📐 <b>ТРЕНД-ПРОБОЙ ${arrow}</b>  <code>${coinSymbol}USDT</code>\n` +
     `${strength} <b>${dirLabel}</b>  [${tfLabel}]\n` +
-    `💵 <code>$${price}</code>`;
+    `💵 <code>$${price}</code>` +
+    brokenText +
+    nextText;
+
+  const buttons = {
+    inline_keyboard: [[
+      { text: '🔗 Binance', url: `https://www.binance.com/futures/${coinSymbol}USDT` },
+      { text: '📊 TradingView', url: `https://www.tradingview.com/chart/?symbol=BINANCE:${coinSymbol}USDT.P` },
+    ]],
+  };
 
   try {
     const imgBuffer = await generateTrendlineChart(
       coinSymbol, closes, breakout.resistLine, breakout.supportLine, direction,
     );
-    await telegram.sendPhoto(chatId, { source: imgBuffer }, { caption, parse_mode: 'HTML' });
+    await telegram.sendPhoto(chatId, { source: imgBuffer }, { caption, parse_mode: 'HTML', reply_markup: buttons });
   } catch {
-    await telegram.sendMessage(chatId, caption, { parse_mode: 'HTML' }).catch(() => {});
+    await telegram.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: buttons }).catch(() => {});
   }
 };

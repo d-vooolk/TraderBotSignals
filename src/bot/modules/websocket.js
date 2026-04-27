@@ -20,7 +20,9 @@ const FUNDING_TTL  = 4 * 3600_000;
 const oiCache      = {};           // symbol -> { oi, ts }
 const OI_TTL       = 5 * 60_000;
 
-const signalCooldown = {};         // symbol -> timestamp
+const signalCooldown    = {};       // symbol -> timestamp
+const liveTrendCooldown = {};       // symbol -> timestamp for live-candle trendline checks
+const LIVE_TREND_CHECK_MS = 60_000; // at most once per minute per symbol
 
 // ─── Индикаторы ──────────────────────────────────────────────────────────────
 
@@ -120,12 +122,12 @@ const checkFundingRate = async (symbol, direction) => {
     const threshold = SETTINGS.handler.fundingThreshold ?? 0.0005;
     // Слишком много лонгов — избегаем LONG входов; слишком много шортов — SHORT входов
     if (direction === 'up'   && rate >  threshold) return false;
-    if (direction === 'down' && rate < -threshold) return false;
-    return true;
+    return !(direction === 'down' && rate < -threshold);
+
   } catch { return true; }
 };
 
-const checkOI = async (symbol, direction) => {
+const checkOI = async (symbol) => {
   try {
     const now    = Date.now();
     const sym    = `${symbol.toUpperCase()}USDT`;
@@ -255,13 +257,38 @@ export const startWebSocket = async (bot) => {
                   fireSignal(coinSymbol, bbDir, 0, closePrice, 'bb_reversal');
                 } else {
                   const band = bbDir === 'up' ? 'нижнюю' : 'верхнюю';
-                  bot.telegram.sendMessage(
-                    SETTINGS.savedChatId,
-                    `🟣 <b>BB-РАЗВОРОТ ${arrow}</b>  <code>${coinSymbol.toUpperCase()}USDT</code>\n` +
-                    `Цена пробила ${band} полосу и возвращается назад\n` +
-                    `💵 <code>$${closePrice}</code>`,
-                    { parse_mode: 'HTML' }
-                  ).catch(() => {});
+
+                  // S/R levels: current BB bands + SMA20 as mean-reversion target
+                  const bbNow = calcBB(data.closes);
+                  const sma20 = data.closes.length >= 20
+                    ? data.closes.slice(-20).reduce((a, b) => a + b, 0) / 20
+                    : null;
+                  const fmtP = (p) => p >= 1000 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+                  const srText = bbNow && sma20
+                    ? `\n📍 Цель (средняя BB): <code>$${fmtP(sma20)}</code>\n` +
+                      `📌 Диапазон BB: <code>$${fmtP(bbNow.lower)}</code> → <code>$${fmtP(bbNow.upper)}</code>`
+                    : '';
+
+                  // Stagger 0–5 s so simultaneous signals don't arrive as a burst
+                  const staggerMs = Math.floor(Math.random() * 5000);
+                  setTimeout(() => {
+                    bot.telegram.sendMessage(
+                      SETTINGS.savedChatId,
+                      `🟣 <b>BB-РАЗВОРОТ ${arrow}</b>  <code>${coinSymbol.toUpperCase()}USDT</code>\n` +
+                      `Цена пробила ${band} полосу и возвращается назад\n` +
+                      `💵 <code>$${closePrice}</code>` +
+                      srText,
+                      {
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                          inline_keyboard: [[
+                            { text: '🔗 Binance', url: `https://www.binance.com/futures/${coinSymbol.toUpperCase()}USDT` },
+                            { text: '📊 TradingView', url: `https://www.tradingview.com/chart/?symbol=BINANCE:${coinSymbol.toUpperCase()}USDT.P` },
+                          ]],
+                        },
+                      }
+                    ).catch(() => {});
+                  }, staggerMs);
                 }
               }
             }
@@ -269,9 +296,18 @@ export const startWebSocket = async (bot) => {
         }
       }
 
-      // Trendline breakout signal (manual only — never fires autoTrader)
+      // Trendline breakout signal on closed candle (manual only — never fires autoTrader)
       if (symbol !== 'btcusdt') {
         checkTrendlineSignal(symbol, [...data.closes], [...data.volumes], [...btcCloses], bot?.telegram).catch(() => {});
+      }
+    } else {
+      // Live-candle trendline check: catch breakouts before the candle closes (max once per minute)
+      if (symbol !== 'btcusdt' && data.closes.length >= 19) {
+        const nowTs = Date.now();
+        if (nowTs - (liveTrendCooldown[symbol] || 0) >= LIVE_TREND_CHECK_MS) {
+          liveTrendCooldown[symbol] = nowTs;
+          checkTrendlineSignal(symbol, [...data.closes, closePrice], data.volumes, [...btcCloses], bot?.telegram).catch(() => {});
+        }
       }
     }
 
@@ -378,4 +414,27 @@ export const startWebSocket = async (bot) => {
   };
 
   batches.forEach((batch, index) => connectWebSocket(batch, index));
+
+  // Watchdog: notify when candle stream goes silent for 5+ minutes and when it recovers
+  let watchdogAlerted = false;
+  setInterval(() => {
+    if (!wsStatus.lastCandleAt || !bot || !SETTINGS.savedChatId) return;
+    const msSilent = Date.now() - new Date(wsStatus.lastCandleAt).getTime();
+    if (msSilent > 5 * 60_000 && !watchdogAlerted) {
+      watchdogAlerted = true;
+      const mins = Math.round(msSilent / 60_000);
+      bot.telegram.sendMessage(
+        SETTINGS.savedChatId,
+        `⚠️ <b>Нет данных от Binance уже ${mins} мин.</b> Переподключение идёт автоматически.`,
+        { parse_mode: 'HTML' }
+      ).catch(() => {});
+    } else if (msSilent <= 5 * 60_000 && watchdogAlerted) {
+      watchdogAlerted = false;
+      bot.telegram.sendMessage(
+        SETTINGS.savedChatId,
+        `✅ <b>Соединение с Binance восстановлено.</b>`,
+        { parse_mode: 'HTML' }
+      ).catch(() => {});
+    }
+  }, 60_000);
 };

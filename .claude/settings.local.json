@@ -25,7 +25,12 @@
       "Bash(git commit *)",
       "Bash(apt-get install *)",
       "PowerShell(Install-Module -Name Posh-SSH -Force -Scope CurrentUser -SkipPublisherCheck 2>&1 | Select-Object -Last 5)",
-      "PowerShell(Install-Module -Name Posh-SSH -Force -Scope CurrentUser 2>&1 | Select-Object -Last 3)"
+      "PowerShell(Install-Module -Name Posh-SSH -Force -Scope CurrentUser 2>&1 | Select-Object -Last 3)",
+      "Bash(git push *)",
+      "Bash(echo \"SSH started in background with PID $!\")",
+      "PowerShell(python -c \"import paramiko; print\\('paramiko available'\\)\" 2>&1)",
+      "PowerShell($ip = '217.12.37.199')",
+      "PowerShell(python C:\\\\Users\\\\Dmitriy\\\\Desktop\\\\TraderBotSignals\\\\ssh_check.py 2>&1)"
     ]
   }
 }
