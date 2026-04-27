@@ -386,15 +386,28 @@ export const startWebSocket = async (bot) => {
       const streams = symbolsBatch.map(s => `${s.toLowerCase()}@kline_${SETTINGS.handler.temporaryCandle}`).join("/");
       const ws = new WebSocket(getWsUrl(streams));
 
+      let lastMsgAt   = Date.now();
+      let healthTimer = null;
+
       ws.addEventListener("open", () => {
-        attempt = 0;
+        attempt   = 0;
+        lastMsgAt = Date.now();
         wsStatus.running = true;
         console.info(`✅ WebSocket ${index + 1} на ${symbolsBatch.length} монет открыт.`);
+
+        // Detect silent connections: if no message in 3 min → force-reconnect
+        healthTimer = setInterval(() => {
+          if (Date.now() - lastMsgAt > 3 * 60_000) {
+            console.warn(`⚠️ WebSocket ${index + 1} молчит 3+ мин. Принудительное переподключение...`);
+            ws.terminate();
+          }
+        }, 60_000);
       });
 
       ws.addEventListener("error", (error) => console.error(`❌ Ошибка WebSocket ${index + 1}:`, error));
 
       ws.addEventListener("message", (event) => {
+        lastMsgAt = Date.now();
         try {
           const data = JSON.parse(event.data);
           if (data?.data?.k) processCandle(data.data.s.toLowerCase(), data.data.k);
@@ -404,6 +417,7 @@ export const startWebSocket = async (bot) => {
       });
 
       ws.addEventListener("close", () => {
+        if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
         const delay = Math.min(1000 * 2 ** attempt, 60_000);
         console.info(`🔄 WebSocket ${index + 1} закрылся. Перезапуск через ${delay / 1000}s...`);
         attempt++;
@@ -416,10 +430,14 @@ export const startWebSocket = async (bot) => {
   batches.forEach((batch, index) => connectWebSocket(batch, index));
 
   // Watchdog: notify when candle stream goes silent for 5+ minutes and when it recovers
+  // Also fires when lastCandleAt is null (data never arrived since startup)
   let watchdogAlerted = false;
+  const watchdogStart = Date.now();
   setInterval(() => {
-    if (!wsStatus.lastCandleAt || !bot || !SETTINGS.savedChatId) return;
-    const msSilent = Date.now() - new Date(wsStatus.lastCandleAt).getTime();
+    if (!bot || !SETTINGS.savedChatId) return;
+    const msSilent = wsStatus.lastCandleAt
+      ? Date.now() - new Date(wsStatus.lastCandleAt).getTime()
+      : Date.now() - watchdogStart;
     if (msSilent > 5 * 60_000 && !watchdogAlerted) {
       watchdogAlerted = true;
       const mins = Math.round(msSilent / 60_000);
